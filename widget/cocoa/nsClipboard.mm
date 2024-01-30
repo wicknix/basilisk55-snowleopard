@@ -29,9 +29,8 @@ using mozilla::gfx::DataSourceSurface;
 using mozilla::gfx::SourceSurface;
 using mozilla::LogLevel;
 
-#define IMAGE_PASTEBOARD_TYPES NSPasteboardTypeTIFF, \
-                               NSPasteboardTypePNG, \
-                               nil
+#define IMAGE_PASTEBOARD_TYPES NSTIFFPboardType, @"Apple PNG pasteboard type", nil
+
 
 extern PRLogModuleInfo* sCocoaLog;
 
@@ -104,8 +103,8 @@ nsClipboard::SetNativeClipboardData(int32_t aWhichClipboard)
   NSPasteboard* cocoaPasteboard;
   if (aWhichClipboard == kFindClipboard) {
     cocoaPasteboard = [NSPasteboard pasteboardWithName:NSFindPboard];
-    [cocoaPasteboard declareTypes:
-      [NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
+    [cocoaPasteboard declareTypes:[NSArray arrayWithObject:NSStringPboardType] owner:nil];
+
   } else {
     // Write everything else out to the general pasteboard.
     cocoaPasteboard = [NSPasteboard generalPasteboard];
@@ -116,15 +115,15 @@ nsClipboard::SetNativeClipboardData(int32_t aWhichClipboard)
     NSString* currentKey = [outputKeys objectAtIndex:i];
     id currentValue = [pasteboardOutputDict valueForKey:currentKey];
     if (aWhichClipboard == kFindClipboard) {
-      if ([currentKey isEqualToString:NSPasteboardTypeString])
+      if (currentKey == NSStringPboardType)
         [cocoaPasteboard setString:currentValue forType:currentKey];
     } else {
-      if ([currentKey isEqualToString:NSPasteboardTypeString] ||
-          [currentKey isEqualToString:kCorePboardType_url] ||
-          [currentKey isEqualToString:kCorePboardType_urld] ||
-          [currentKey isEqualToString:kCorePboardType_urln]) {
+      if (currentKey == NSStringPboardType ||
+          currentKey == kCorePboardType_url ||
+          currentKey == kCorePboardType_urld ||
+          currentKey == kCorePboardType_urln) {
         [cocoaPasteboard setString:currentValue forType:currentKey];
-      } else if ([currentKey isEqualToString:NSPasteboardTypeHTML]) {
+      } else if (currentKey == NSHTMLPboardType) {
         [cocoaPasteboard setString:(nsClipboard::WrapHtmlForSystemPasteboard(currentValue))
                          forType:currentKey];
       } else {
@@ -174,7 +173,7 @@ nsClipboard::TransferableFromPasteboard(nsITransferable *aTransferable, NSPasteb
         continue;
 
       NSData* stringData;
-      if ([pboardType isEqualToString:NSPasteboardTypeRTF]) {
+      if ([pboardType isEqualToString:NSRTFPboardType]) {
         stringData = [pString dataUsingEncoding:NSASCIIStringEncoding];
       } else {
         stringData = [pString dataUsingEncoding:NSUnicodeStringEncoding];
@@ -261,10 +260,8 @@ nsClipboard::TransferableFromPasteboard(nsITransferable *aTransferable, NSPasteb
       // Note that ImageIO, like all CF APIs, allows NULLs to propagate freely
       // and safely in most cases (like ObjC). A notable exception is CFRelease.
       NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
-                                (NSNumber*)kCFBooleanTrue,
-                                kCGImageSourceShouldAllowFloat,
-                                (type == NSPasteboardTypeTIFF ? @"public.tiff" :
-                                                                @"public.png"),
+                                (NSNumber*)kCFBooleanTrue, kCGImageSourceShouldAllowFloat,
+                                (type == NSTIFFPboardType ? @"public.tiff" : @"public.png"),
                                 kCGImageSourceTypeIdentifierHint, nil];
 
       CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)pasteboardData, 
@@ -559,8 +556,8 @@ nsClipboard::PasteboardDictFromTransferable(nsITransferable* aTransferable)
         continue;
       }
 
-      [pasteboardOutputDict setObject:(NSMutableData*)tiffData
-                               forKey:NSPasteboardTypeTIFF];
+      [pasteboardOutputDict setObject:(NSMutableData*)tiffData forKey:NSTIFFPboardType];
+
       if (tiffData)
         CFRelease(tiffData);
     }
@@ -597,8 +594,8 @@ nsClipboard::PasteboardDictFromTransferable(nsITransferable* aTransferable)
       [pasteboardOutputDict setObject:fileList forKey:NSFilenamesPboardType];
     }
     else if (flavorStr.EqualsLiteral(kFilePromiseMime)) {
-      [pasteboardOutputDict setObject:[NSArray arrayWithObject:@""]
-                               forKey:(NSString*)kPasteboardTypeFileURLPromise];
+      [pasteboardOutputDict setObject:[NSArray arrayWithObject:@""] forKey:NSFilesPromisePboardType];      
+
     }
     else if (flavorStr.EqualsLiteral(kURLMime)) {
       uint32_t len = 0;
@@ -651,13 +648,13 @@ nsClipboard::PasteboardDictFromTransferable(nsITransferable* aTransferable)
 bool nsClipboard::IsStringType(const nsCString& aMIMEType, NSString** aPasteboardType)
 {
   if (aMIMEType.EqualsLiteral(kUnicodeMime)) {
-    *aPasteboardType = NSPasteboardTypeString;
+    *aPasteboardType = NSStringPboardType;
     return true;
   } else if (aMIMEType.EqualsLiteral(kRTFMime)) {
-    *aPasteboardType = NSPasteboardTypeRTF;
+    *aPasteboardType = NSRTFPboardType;
     return true;
   } else if (aMIMEType.EqualsLiteral(kHTMLMime)) {
-    *aPasteboardType = NSPasteboardTypeHTML;
+    *aPasteboardType = NSHTMLPboardType;
     return true;
   } else {
     return false;
