@@ -732,14 +732,6 @@ CERT_GetCertKeyType
 # to make Java code happy.
 NSS_VersionCheck
 NSS_Initialize
-CERT_FindCertByIssuerAndSNCX;
-CERT_FindCertByNicknameOrEmailAddrCX;
-CERT_FindCertByNicknameOrEmailAddrForUsageCX;
-PK11_CreateManagedGenericObject;
-SGN_NewContextWithAlgorithmID;
-SEC_SignDataWithAlgorithmID;
-SEC_DerSignDataWithAlgorithmID;
-SEC_CreateSignatureAlgorithmParameters;
 NSS_OptionGet
 SECKEY_GetPrivateKeyType
 #ifdef NSS_EXTRA_SYMBOLS_FILE

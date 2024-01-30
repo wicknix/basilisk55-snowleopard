@@ -62,6 +62,9 @@
 # include <iconv.h>
 #endif
 
+#define CONFIG_FRAME_THREAD_ENCODER 0
+
+
 #include "libavutil/ffversion.h"
 const char av_codec_ffversion[] = "FFmpeg version " FFMPEG_VERSION;
 

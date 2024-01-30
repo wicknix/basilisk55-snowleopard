@@ -29,6 +29,9 @@
 #include "frame_thread_encoder.h"
 #include "internal.h"
 
+#define CONFIG_FRAME_THREAD_ENCODER 0
+
+
 int ff_alloc_packet2(AVCodecContext *avctx, AVPacket *avpkt, int64_t size, int64_t min_size)
 {
     if (avpkt->size < 0) {

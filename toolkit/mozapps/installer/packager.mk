@@ -4,7 +4,6 @@
 
 include $(MOZILLA_DIR)/toolkit/mozapps/installer/package-name.mk
 include $(MOZILLA_DIR)/toolkit/mozapps/installer/upload-files.mk
-include $(MOZILLA_DIR)/toolkit/mozapps/installer/make-eme.mk
 
 # This is how we create the binary packages we release to the public.
 
@@ -21,13 +20,12 @@ endif
 	@rm -rf $(DEPTH)/installer-stage $(DIST)/xpt
 	@echo 'Staging installer files...'
 	@$(NSINSTALL) -D $(DEPTH)/installer-stage/core
-	@cp -av $(DIST)/$(STAGEPATH)$(MOZ_PKG_DIR)$(_BINPATH)/. $(DEPTH)/installer-stage/core
+	@cp -av $(DIST)/$(MOZ_PKG_DIR)$(_BINPATH)/. $(DEPTH)/installer-stage/core
+	@(cd $(DEPTH)/installer-stage/core && $(CREATE_PRECOMPLETE_CMD))
 ifdef MOZ_SIGN_PREPARED_PACKAGE_CMD
 # The && true is necessary to make sure Pymake spins a shell
 	$(MOZ_SIGN_PREPARED_PACKAGE_CMD) $(DEPTH)/installer-stage && true
 endif
-	$(call MAKE_SIGN_EME_VOUCHER,$(DEPTH)/installer-stage/core)
-	@(cd $(DEPTH)/installer-stage/core && $(CREATE_PRECOMPLETE_CMD))
 
 ifeq (gonk,$(MOZ_WIDGET_TOOLKIT))
 ELF_HACK_FLAGS = --fill
@@ -50,11 +48,10 @@ stage-package: $(MOZ_PKG_MANIFEST) $(MOZ_PKG_MANIFEST_DEPS)
 		) \
 		$(if $(JARLOG_DIR),$(addprefix --jarlog ,$(wildcard $(JARLOG_FILE_AB_CD)))) \
 		$(if $(OPTIMIZEJARS),--optimizejars) \
-		$(addprefix --compress ,$(JAR_COMPRESSION)) \
-		$(addprefix --unify ,$(UNIFY_DIST)) \
-		$(MOZ_PKG_MANIFEST) $(DIST) $(DIST)/$(STAGEPATH)$(MOZ_PKG_DIR)$(if $(MOZ_PKG_MANIFEST),,$(_BINPATH)) \
+		$(if $(DISABLE_JAR_COMPRESSION),--disable-compression) \
+		$(MOZ_PKG_MANIFEST) $(DIST) $(DIST)/$(MOZ_PKG_DIR)$(if $(MOZ_PKG_MANIFEST),,$(_BINPATH)) \
 		$(if $(filter omni,$(MOZ_PACKAGER_FORMAT)),$(if $(NON_OMNIJAR_FILES),--non-resource $(NON_OMNIJAR_FILES)))
-	$(PYTHON) $(MOZILLA_DIR)/toolkit/mozapps/installer/find-dupes.py $(DEFINES) $(ACDEFINES) $(MOZ_PKG_DUPEFLAGS) $(DIST)/$(STAGEPATH)$(MOZ_PKG_DIR)
+	$(PYTHON) $(MOZILLA_DIR)/toolkit/mozapps/installer/find-dupes.py $(DEFINES) $(ACDEFINES) $(MOZ_PKG_DUPEFLAGS) $(DIST)/$(MOZ_PKG_DIR)
 ifndef MOZ_THUNDERBIRD
 	# Package mozharness
 	$(call py_action,test_archive, \
@@ -82,10 +79,17 @@ ifdef MOZ_CODE_COVERAGE
 endif
 ifeq (Darwin, $(OS_ARCH))
 ifdef MOZ_ASAN
-	@echo "Rewriting ASan runtime dylib paths for all binaries in $(DIST)/$(STAGEPATH)$(MOZ_PKG_DIR)$(_BINPATH) ..."
-	$(PYTHON) $(MOZILLA_DIR)/build/unix/rewrite_asan_dylib.py $(DIST)/$(STAGEPATH)$(MOZ_PKG_DIR)$(_BINPATH)
+	@echo "Rewriting ASan runtime dylib paths for all binaries in $(DIST)/$(MOZ_PKG_DIR)$(_BINPATH) ..."
+	$(PYTHON) $(MOZILLA_DIR)/build/unix/rewrite_asan_dylib.py $(DIST)/$(MOZ_PKG_DIR)$(_BINPATH)
 endif # MOZ_ASAN
 endif # Darwin
+ifdef MOZ_STYLO
+ifndef MOZ_ARTIFACT_BUILDS
+	@echo 'Packing stylo binding files...'
+	cd '$(DIST)/rust_bindings/style' && \
+		zip -r5D '$(ABS_DIST)/$(PKG_PATH)$(STYLO_BINDINGS_PACKAGE)' .
+endif # MOZ_ARTIFACT_BUILDS
+endif # MOZ_STYLO
 
 prepare-package: stage-package
 

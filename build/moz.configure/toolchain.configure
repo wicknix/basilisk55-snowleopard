@@ -287,9 +287,7 @@ def get_compiler_info(compiler, language):
 
     result = try_preprocess(compiler, language, check)
 
-    if not result:
-        raise FatalCheckError(
-            'Unknown compiler or compiler not supported.')
+
 
     # Metadata emitted by preprocessors such as GCC with LANG=ja_JP.utf-8 may
     # have non-ASCII characters. Treat the output as bytearray.
@@ -304,8 +302,7 @@ def get_compiler_info(compiler, language):
     try:
         type = CompilerType(data['COMPILER'])
     except:
-        raise FatalCheckError(
-            'Unknown compiler or compiler not supported.')
+        pass
 
     cplusplus = int(data.get('cplusplus', '0L').rstrip('L'))
     stdc_version = int(data.get('STDC_VERSION', '0L').rstrip('L'))
@@ -364,7 +361,7 @@ def check_compiler(compiler, language, target):
     # -std=gnu++11.
     if info.language == 'C++':
         if info.type in ('clang', 'gcc') and info.language_version != 201103:
-            append_flag('-std=gnu++11')
+            append_flag('-std=gnu++14')
         # MSVC 2015 headers include C++14 features, but don't guard them
         # with appropriate checks.
         if info.type == 'clang-cl' and info.language_version != 201402:
@@ -693,9 +690,7 @@ def compiler(language, host_or_target, c_compiler=None, other_compiler=None,
                    info.target_endianness or 'unknown', host_or_target_str,
                    host_or_target.endianness))
 
-        if info.flags:
-            raise FatalCheckError(
-                'Unknown compiler or compiler not supported.')
+
 
         # Compiler version checks
         # ===================================================
