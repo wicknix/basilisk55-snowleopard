@@ -219,6 +219,7 @@
 #include "TabChild.h"
 #include "mozilla/dom/DocGroup.h"
 #include "mozilla/dom/TabGroup.h"
+#include "mozilla/AsyncEventDispatcher.h"
 
 #include "nsIBidiKeyboard.h"
 
@@ -297,6 +298,7 @@ bool nsContentUtils::sGettersDecodeURLHash = false;
 bool nsContentUtils::sPrivacyResistFingerprinting = false;
 bool nsContentUtils::sSendPerformanceTimingNotifications = false;
 bool nsContentUtils::sUseActivityCursor = false;
+bool nsContentUtils::sPreloadEnabled = true;
 
 uint32_t nsContentUtils::sHandlingInputTimeout = 1000;
 
@@ -634,6 +636,9 @@ nsContentUtils::Init()
 
   Preferences::AddBoolVarCache(&sUseActivityCursor,
                                "ui.use_activity_cursor", false);
+
+  Preferences::AddBoolVarCache(&sPreloadEnabled,
+                               "network.preload", true);
 
   Element::InitCCCallbacks();
 
@@ -4167,6 +4172,28 @@ nsresult GetEventAndTarget(nsIDocument* aDoc, nsISupports* aTarget,
   return NS_OK;
 }
 
+void
+nsContentUtils::DispatchEventForPreloadURI(nsIDOMNode* aNode,
+                                           nsContentPolicyType& aPolicyType)
+{
+  if (!IsPreloadEnabled()) {
+    return;
+  }
+
+  nsCOMPtr<nsINode> domNode = do_QueryInterface(aNode);
+  if (domNode && domNode->IsInComposedDoc()) {
+    bool success = aPolicyType != nsIContentPolicy::TYPE_INVALID;
+    RefPtr<AsyncEventDispatcher> asyncDispatcher =
+        new AsyncEventDispatcher(domNode,
+                                 success ?
+                                  NS_LITERAL_STRING("load") :
+                                  NS_LITERAL_STRING("error"),
+                                 /* aCanBubble = */ false,
+                                 /* aCancelable = */ false);
+    asyncDispatcher->RunDOMEventWhenSafe();
+  }
+}
+
 // static
 nsresult
 nsContentUtils::DispatchTrustedEvent(nsIDocument* aDoc, nsISupports* aTarget,
@@ -7419,6 +7446,12 @@ nsContentUtils::GPCEnabled()
   return nsContentUtils::sGPCEnabled;
 }
 
+bool
+nsContentUtils::IsPreloadEnabled()
+{
+  return nsContentUtils::sPreloadEnabled;
+}
+
 mozilla::LogModule*
 nsContentUtils::DOMDumpLog()
 {
@@ -7476,6 +7509,48 @@ nsContentUtils::IsJavascriptMIMEType(const nsAString& aMIMEType)
 
   for (uint32_t i = 0; jsTypes[i]; ++i) {
     if (aMIMEType.LowerCaseEqualsASCII(jsTypes[i])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool
+nsContentUtils::IsJSONMIMEType(const nsAString& aMIMEType)
+{
+  static const char* jsonTypes[] = {
+    "text/json",
+    "application/json",
+    "application/geo+json",
+    nullptr
+  };
+
+  for (uint32_t i = 0; jsonTypes[i]; ++i) {
+    if (aMIMEType.LowerCaseEqualsASCII(jsonTypes[i])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool
+nsContentUtils::IsFontMIMEType(const nsAString& aMIMEType)
+{
+  // The following list was taken from IANA and excludes deprecated mime-types:
+  // https://www.iana.org/assignments/media-types/media-types.xhtml#font
+  static const char* fontTypes[] = {
+    "font/otf",
+    "font/sfnt",
+    "font/ttf",
+    "font/woff",
+    "font/woff2",
+    nullptr
+  };
+
+  for (uint32_t i = 0; fontTypes[i]; ++i) {
+    if (aMIMEType.LowerCaseEqualsASCII(fontTypes[i])) {
       return true;
     }
   }

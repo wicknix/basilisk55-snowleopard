@@ -177,7 +177,7 @@ HTMLLinkElement::BindToTree(nsIDocument* aDocument,
 
   if (nsIDocument* doc = GetComposedDoc()) {
     doc->RegisterPendingLinkUpdate(this);
-    TryDNSPrefetchPreconnectOrPrefetchOrPrerender();
+    TrySpeculativeLoadFeature();
   }
 
   void (HTMLLinkElement::*update)() = &HTMLLinkElement::UpdateStyleSheetInternal;
@@ -240,6 +240,11 @@ HTMLLinkElement::ParseAttribute(int32_t aNamespaceID,
   if (aNamespaceID == kNameSpaceID_None) {
     if (aAttribute == nsGkAtoms::crossorigin) {
       ParseCORSValue(aValue, aResult);
+      return true;
+    }
+
+    if (aAttribute == nsGkAtoms::as) {
+      ParseDestinationValue(aValue, aResult);
       return true;
     }
 
@@ -375,6 +380,8 @@ HTMLLinkElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
          aName == nsGkAtoms::title ||
          aName == nsGkAtoms::media ||
          aName == nsGkAtoms::type ||
+         aName == nsGkAtoms::as ||
+         aName == nsGkAtoms::crossorigin ||
          (LINK_DISABLED && aName == nsGkAtoms::disabled))) {
       bool dropSheet = false;
       if (aName == nsGkAtoms::rel) {
@@ -393,9 +400,17 @@ HTMLLinkElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
         UpdateImport();
       }
 
-      if ((aName == nsGkAtoms::rel || aName == nsGkAtoms::href) &&
-          IsInComposedDoc()) {
-        TryDNSPrefetchPreconnectOrPrefetchOrPrerender();
+      if (IsInComposedDoc()) {
+        if (aName == nsGkAtoms::rel || aName == nsGkAtoms::href) {
+          TrySpeculativeLoadFeature();
+        }
+
+        if (aName == nsGkAtoms::as ||
+            aName == nsGkAtoms::type ||
+            aName == nsGkAtoms::crossorigin ||
+            aName == nsGkAtoms::media) {
+          UpdatePreload(aName, aValue, aOldValue);
+        }
       }
 
       UpdateStyleSheetInternal(nullptr, nullptr,
@@ -421,6 +436,13 @@ HTMLLinkElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
           aName == nsGkAtoms::type ||
           (LINK_DISABLED && aName == nsGkAtoms::disabled)) {
         UpdateStyleSheetInternal(nullptr, nullptr, true);
+      }
+      if ((aName == nsGkAtoms::as ||
+           aName == nsGkAtoms::type ||
+           aName == nsGkAtoms::crossorigin ||
+           aName == nsGkAtoms::media) &&
+          IsInComposedDoc()) {
+        UpdatePreload(aName, aValue, aOldValue);
       }
       if (aName == nsGkAtoms::href ||
           aName == nsGkAtoms::rel) {
@@ -472,6 +494,7 @@ static const DOMTokenListSupportedToken sSupportedRelValues[] = {
   "preconnect",
   "icon",
   "search",
+  "preload",
   nullptr
 };
 
@@ -524,7 +547,8 @@ HTMLLinkElement::GetStyleSheetInfo(nsAString& aTitle,
 
   nsAutoString rel;
   GetAttr(kNameSpaceID_None, nsGkAtoms::rel, rel);
-  uint32_t linkTypes = nsStyleLinkElement::ParseLinkTypes(rel, NodePrincipal());
+  uint32_t linkTypes =
+    nsStyleLinkElement::ParseLinkTypes(rel, NodePrincipal());
   // Is it a stylesheet link?
   if (!(linkTypes & nsStyleLinkElement::eSTYLESHEET)) {
     return;
@@ -601,6 +625,12 @@ JSObject*
 HTMLLinkElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
   return HTMLLinkElementBinding::Wrap(aCx, this, aGivenProto);
+}
+
+void
+HTMLLinkElement::GetAs(nsAString& aResult)
+{
+  GetEnumAttr(nsGkAtoms::as, EmptyCString().get(), aResult);
 }
 
 already_AddRefed<nsIDocument>
