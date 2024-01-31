@@ -20,7 +20,6 @@ ID
 **/.dir-locals.el
 
 # User files that may appear at the root
-/.mozconfig*
 /mozconfig
 /configure
 /old-configure
