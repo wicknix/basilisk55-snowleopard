@@ -4,28 +4,26 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "avcodec.h"
+#include "bsf.h"
+#include "bsf_internal.h"
 
+typedef struct FFTContext FFTContext;
 typedef struct H264PredContext H264PredContext;
+typedef struct RDFTContext RDFTContext;
 typedef struct VideoDSPContext VideoDSPContext;
 typedef struct VP8DSPContext VP8DSPContext;
 typedef struct VP9DSPContext VP9DSPContext;
 typedef struct FLACDSPContext FLACDSPContext;
 
 AVHWAccel ff_h263_vaapi_hwaccel;
-AVHWAccel ff_h263_vdpau_hwaccel;
 AVHWAccel ff_h263_videotoolbox_hwaccel;
 AVHWAccel ff_h264_d3d11va_hwaccel;
 AVHWAccel ff_h264_dxva2_hwaccel;
-AVHWAccel ff_h264_mmal_hwaccel;
-AVHWAccel ff_h264_qsv_hwaccel;
 AVHWAccel ff_h264_vaapi_hwaccel;
-AVHWAccel ff_h264_vda_hwaccel;
-AVHWAccel ff_h264_vda_old_hwaccel;
 AVHWAccel ff_h264_vdpau_hwaccel;
 AVHWAccel ff_h264_videotoolbox_hwaccel;
 AVHWAccel ff_hevc_d3d11va_hwaccel;
 AVHWAccel ff_hevc_dxva2_hwaccel;
-AVHWAccel ff_hevc_qsv_hwaccel;
 AVHWAccel ff_hevc_vaapi_hwaccel;
 AVHWAccel ff_hevc_vdpau_hwaccel;
 AVHWAccel ff_mpeg1_xvmc_hwaccel;
@@ -34,11 +32,9 @@ AVHWAccel ff_mpeg1_videotoolbox_hwaccel;
 AVHWAccel ff_mpeg2_xvmc_hwaccel;
 AVHWAccel ff_mpeg2_d3d11va_hwaccel;
 AVHWAccel ff_mpeg2_dxva2_hwaccel;
-AVHWAccel ff_mpeg2_qsv_hwaccel;
 AVHWAccel ff_mpeg2_vaapi_hwaccel;
 AVHWAccel ff_mpeg2_vdpau_hwaccel;
 AVHWAccel ff_mpeg2_videotoolbox_hwaccel;
-AVHWAccel ff_mpeg4_mmal_hwaccel;
 AVHWAccel ff_mpeg4_vaapi_hwaccel;
 AVHWAccel ff_mpeg4_vdpau_hwaccel;
 AVHWAccel ff_mpeg4_videotoolbox_hwaccel;
@@ -46,40 +42,19 @@ AVHWAccel ff_vc1_d3d11va_hwaccel;
 AVHWAccel ff_vc1_dxva2_hwaccel;
 AVHWAccel ff_vc1_vaapi_hwaccel;
 AVHWAccel ff_vc1_vdpau_hwaccel;
-AVHWAccel ff_vc1_qsv_hwaccel;
 AVHWAccel ff_wmv3_d3d11va_hwaccel;
 AVHWAccel ff_wmv3_dxva2_hwaccel;
 AVHWAccel ff_wmv3_vaapi_hwaccel;
 AVHWAccel ff_wmv3_vdpau_hwaccel;
-AVHWAccel ff_mpeg2_mmal_hwaccel;
-AVHWAccel ff_vc1_mmal_hwaccel;
 AVHWAccel ff_vp9_d3d11va_hwaccel;
 AVHWAccel ff_vp9_dxva2_hwaccel;
 AVHWAccel ff_vp9_vaapi_hwaccel;
-AVHWAccel ff_vp9_cuvid_hwaccel;
-AVHWAccel ff_vp8_cuvid_hwaccel;
-AVHWAccel ff_vc1_cuvid_hwaccel;
-AVHWAccel ff_hevc_cuvid_hwaccel;
-AVHWAccel ff_h264_cuvid_hwaccel;
-/* Added by FFmpeg 3.2 */
-AVHWAccel ff_h263_cuvid_hwaccel;
-AVHWAccel ff_mjpeg_cuvid_hwaccel;
-AVHWAccel ff_mpeg1_cuvid_hwaccel;
-AVHWAccel ff_mpeg2_cuvid_hwaccel;
-AVHWAccel ff_mpeg4_cuvid_hwaccel;
-AVHWAccel ff_h264_mediacodec_hwaccel;
-AVHWAccel ff_hevc_mediacodec_hwaccel;
-AVHWAccel ff_mpeg4_mediacodec_hwaccel;
-AVHWAccel ff_vp8_mediacodec_hwaccel;
-AVHWAccel ff_vp9_mediacodec_hwaccel;
 /* Added by FFmpeg 3.4 */
 AVHWAccel ff_h264_d3d11va2_hwaccel;
 AVHWAccel ff_hevc_d3d11va2_hwaccel;
 AVHWAccel ff_hevc_videotoolbox_hwaccel;
 AVHWAccel ff_mpeg2_d3d11va2_hwaccel;
-AVHWAccel ff_mpeg2_mediacodec_hwaccel;
 AVHWAccel ff_vc1_d3d11va2_hwaccel;
-AVHWAccel ff_vp8_qsv_hwaccel;
 AVHWAccel ff_vp9_d3d11va2_hwaccel;
 AVHWAccel ff_wmv3_d3d11va2_hwaccel;
 
@@ -89,12 +64,14 @@ AVCodec ff_aasc_decoder;
 AVCodec ff_aic_decoder;
 AVCodec ff_alias_pix_encoder;
 AVCodec ff_alias_pix_decoder;
+AVCodec ff_agm_decoder;
 AVCodec ff_amv_encoder;
 AVCodec ff_amv_decoder;
 AVCodec ff_anm_decoder;
 AVCodec ff_ansi_decoder;
 AVCodec ff_apng_encoder;
 AVCodec ff_apng_decoder;
+AVCodec ff_arbc_decoder;
 AVCodec ff_asv1_encoder;
 AVCodec ff_asv1_decoder;
 AVCodec ff_asv2_encoder;
@@ -112,6 +89,7 @@ AVCodec ff_ayuv_decoder;
 AVCodec ff_bethsoftvid_decoder;
 AVCodec ff_bfi_decoder;
 AVCodec ff_bink_decoder;
+AVCodec ff_bitpacked_decoder;
 AVCodec ff_bmp_encoder;
 AVCodec ff_bmp_decoder;
 AVCodec ff_bmv_video_decoder;
@@ -184,8 +162,6 @@ AVCodec ff_h264_decoder;
 AVCodec ff_h264_crystalhd_decoder;
 AVCodec ff_h264_mmal_decoder;
 AVCodec ff_h264_qsv_decoder;
-AVCodec ff_h264_vda_decoder;
-AVCodec ff_h264_vdpau_decoder;
 AVCodec ff_hap_encoder;
 AVCodec ff_hap_decoder;
 AVCodec ff_hevc_decoder;
@@ -195,9 +171,11 @@ AVCodec ff_hq_hqa_decoder;
 AVCodec ff_hqx_decoder;
 AVCodec ff_huffyuv_encoder;
 AVCodec ff_huffyuv_decoder;
+AVCodec ff_hymt_decoder;
 AVCodec ff_idcin_decoder;
 AVCodec ff_iff_byterun1_decoder;
 AVCodec ff_iff_ilbm_decoder;
+AVCodec ff_imm4_decoder;
 AVCodec ff_indeo2_decoder;
 AVCodec ff_indeo3_decoder;
 AVCodec ff_indeo4_decoder;
@@ -213,6 +191,7 @@ AVCodec ff_kmvc_decoder;
 AVCodec ff_lagarith_decoder;
 AVCodec ff_ljpeg_encoder;
 AVCodec ff_loco_decoder;
+AVCodec ff_lscr_decoder;
 AVCodec ff_mdec_decoder;
 AVCodec ff_mimic_decoder;
 AVCodec ff_mjpeg_encoder;
@@ -220,7 +199,6 @@ AVCodec ff_mjpeg_decoder;
 AVCodec ff_mjpegb_decoder;
 AVCodec ff_mmvideo_decoder;
 AVCodec ff_motionpixels_decoder;
-AVCodec ff_mpeg_xvmc_decoder;
 AVCodec ff_mpeg1video_encoder;
 AVCodec ff_mpeg1video_decoder;
 AVCodec ff_mpeg2video_encoder;
@@ -229,10 +207,7 @@ AVCodec ff_mpeg4_encoder;
 AVCodec ff_mpeg4_decoder;
 AVCodec ff_mpeg4_crystalhd_decoder;
 AVCodec ff_mpeg4_mmal_decoder;
-AVCodec ff_mpeg4_vdpau_decoder;
 AVCodec ff_mpegvideo_decoder;
-AVCodec ff_mpeg_vdpau_decoder;
-AVCodec ff_mpeg1_vdpau_decoder;
 AVCodec ff_mpeg2_crystalhd_decoder;
 AVCodec ff_mpeg2_qsv_decoder;
 AVCodec ff_msa1_decoder;
@@ -251,6 +226,7 @@ AVCodec ff_mszh_decoder;
 AVCodec ff_mts2_decoder;
 AVCodec ff_mvc1_decoder;
 AVCodec ff_mvc2_decoder;
+AVCodec ff_mwsc_decoder;
 AVCodec ff_mxpeg_decoder;
 AVCodec ff_nuv_decoder;
 AVCodec ff_paf_video_decoder;
@@ -273,7 +249,7 @@ AVCodec ff_prores_encoder;
 AVCodec ff_prores_decoder;
 AVCodec ff_prores_aw_encoder;
 AVCodec ff_prores_ks_encoder;
-AVCodec ff_prores_lgpl_decoder;
+AVCodec ff_prosumer_decoder;
 AVCodec ff_ptx_decoder;
 AVCodec ff_qdraw_decoder;
 AVCodec ff_qpeg_decoder;
@@ -283,6 +259,7 @@ AVCodec ff_r10k_encoder;
 AVCodec ff_r10k_decoder;
 AVCodec ff_r210_encoder;
 AVCodec ff_r210_decoder;
+AVCodec ff_rasc_decoder;
 AVCodec ff_rawvideo_encoder;
 AVCodec ff_rawvideo_decoder;
 AVCodec ff_rl2_decoder;
@@ -343,7 +320,6 @@ AVCodec ff_vb_decoder;
 AVCodec ff_vble_decoder;
 AVCodec ff_vc1_decoder;
 AVCodec ff_vc1_crystalhd_decoder;
-AVCodec ff_vc1_vdpau_decoder;
 AVCodec ff_vc1image_decoder;
 AVCodec ff_vc1_qsv_decoder;
 AVCodec ff_vc2_encoder;
@@ -351,6 +327,7 @@ AVCodec ff_vcr1_decoder;
 AVCodec ff_vmdvideo_decoder;
 AVCodec ff_vmnc_decoder;
 AVCodec ff_vp3_decoder;
+AVCodec ff_vp4_decoder;
 AVCodec ff_vp5_decoder;
 AVCodec ff_vp6_decoder;
 AVCodec ff_vp6a_decoder;
@@ -364,7 +341,6 @@ AVCodec ff_wmv2_encoder;
 AVCodec ff_wmv2_decoder;
 AVCodec ff_wmv3_decoder;
 AVCodec ff_wmv3_crystalhd_decoder;
-AVCodec ff_wmv3_vdpau_decoder;
 AVCodec ff_wmv3image_decoder;
 AVCodec ff_wnv1_decoder;
 AVCodec ff_xan_wc3_decoder;
@@ -426,7 +402,9 @@ AVCodec ff_g723_1_decoder;
 AVCodec ff_g729_decoder;
 AVCodec ff_gsm_decoder;
 AVCodec ff_gsm_ms_decoder;
+AVCodec ff_hcom_decoder;
 AVCodec ff_iac_decoder;
+AVCodec ff_ilbc_decoder;
 AVCodec ff_imc_decoder;
 AVCodec ff_mace3_decoder;
 AVCodec ff_mace6_decoder;
@@ -485,6 +463,7 @@ AVCodec ff_ws_snd1_decoder;
 AVCodec ff_pcm_alaw_encoder;
 AVCodec ff_pcm_alaw_decoder;
 AVCodec ff_pcm_bluray_decoder;
+AVCodec ff_pcm_dvd_encoder;
 AVCodec ff_pcm_dvd_decoder;
 AVCodec ff_pcm_f32be_encoder;
 AVCodec ff_pcm_f32be_decoder;
@@ -537,6 +516,8 @@ AVCodec ff_pcm_u32be_encoder;
 AVCodec ff_pcm_u32be_decoder;
 AVCodec ff_pcm_u32le_encoder;
 AVCodec ff_pcm_u32le_decoder;
+AVCodec ff_pcm_vidc_encoder;
+AVCodec ff_pcm_vidc_decoder;
 AVCodec ff_pcm_zork_decoder;
 AVCodec ff_interplay_dpcm_decoder;
 AVCodec ff_roq_dpcm_encoder;
@@ -547,6 +528,7 @@ AVCodec ff_adpcm_4xm_decoder;
 AVCodec ff_adpcm_adx_encoder;
 AVCodec ff_adpcm_adx_decoder;
 AVCodec ff_adpcm_afc_decoder;
+AVCodec ff_adpcm_agm_decoder;
 AVCodec ff_adpcm_ct_decoder;
 AVCodec ff_adpcm_dtk_decoder;
 AVCodec ff_adpcm_ea_decoder;
@@ -665,6 +647,7 @@ AVCodec ff_libx264_encoder;
 AVCodec ff_libx264rgb_encoder;
 AVCodec ff_libx265_encoder;
 AVCodec ff_libxavs_encoder;
+AVCodec ff_libxavs2_encoder;
 AVCodec ff_libxvid_encoder;
 AVCodec ff_libzvbi_teletext_decoder;
 AVCodec ff_libaacplus_encoder;
@@ -705,6 +688,9 @@ AVCodec ff_h264_omx_encoder;
 AVCodec ff_h264_nvenc_encoder;
 AVCodec ff_h264_cuvid_decoder;
 AVCodec ff_qdm2_at_decoder;
+AVCodec ff_libaribb24_decoder;
+AVCodec ff_libdav1d_decoder;
+AVCodec ff_libdavs2_decoder;
 AVCodec ff_qdmc_at_decoder;
 AVCodec ff_pcm_mulaw_at_decoder;
 AVCodec ff_pcm_mulaw_at_encoder;
@@ -739,10 +725,8 @@ AVCodec ff_vp8_mediacodec_decoder;
 AVCodec ff_mpeg4_mediacodec_decoder;
 AVCodec ff_mpeg4_cuvid_decoder;
 AVCodec ff_mpeg2_cuvid_decoder;
-AVCodec ff_mpeg1_cuvid_decoder;
 AVCodec ff_mjpeg_cuvid_decoder;
 AVCodec ff_hevc_mediacodec_decoder;
-AVCodec ff_h263_cuvid_decoder;
 AVCodec ff_libopenh264_decoder;
 AVCodec ff_pcm_s64le_decoder;
 AVCodec ff_pcm_s64le_encoder;
@@ -776,11 +760,12 @@ AVCodec ff_vp8_rkmpp_decoder;
 AVCodec ff_vp8_v4l2m2m_decoder;
 AVCodec ff_vp9_rkmpp_decoder;
 AVCodec ff_vp9_v4l2m2m_decoder;
-AVCodec ff_bitpacked_decoder;
+AVCodec ff_wcmv_decoder;
 AVCodec ff_wrapped_avframe_decoder;
 AVCodec ff_xpm_decoder;
 AVCodec ff_atrac3al_decoder;
 AVCodec ff_atrac3pal_decoder;
+AVCodec ff_atrac9_decoder;
 AVCodec ff_dolby_e_decoder;
 AVCodec ff_opus_encoder;
 AVCodec ff_qdmc_decoder;
@@ -799,6 +784,7 @@ AVCodec ff_vp8_v4l2m2m_encoder;
 AVCodec ff_vp8_vaapi_encoder;
 AVCodec ff_vp9_vaapi_encoder;
 
+
 AVCodecParser ff_aac_parser;
 AVCodecParser ff_aac_latm_parser;
 AVCodecParser ff_ac3_parser;
@@ -814,6 +800,7 @@ AVCodecParser ff_dvaudio_parser;
 AVCodecParser ff_dvbsub_parser;
 AVCodecParser ff_dvdsub_parser;
 AVCodecParser ff_dvd_nav_parser;
+AVCodecParser ff_flac_parser;
 AVCodecParser ff_g729_parser;
 AVCodecParser ff_gsm_parser;
 AVCodecParser ff_h261_parser;
@@ -838,21 +825,26 @@ AVCodecParser ff_vp3_parser;
 AVCodecParser ff_sipr_parser;
 AVCodecParser ff_xma_parser;
 
-AVBitStreamFilter ff_aac_adtstoasc_bsf;
-AVBitStreamFilter ff_chomp_bsf;
-AVBitStreamFilter ff_dump_extradata_bsf;
-AVBitStreamFilter ff_h264_mp4toannexb_bsf;
-AVBitStreamFilter ff_hevc_mp4toannexb_bsf;
-AVBitStreamFilter ff_imx_dump_header_bsf;
-AVBitStreamFilter ff_mjpeg2jpeg_bsf;
-AVBitStreamFilter ff_mjpega_dump_header_bsf;
-AVBitStreamFilter ff_mp3_header_decompress_bsf;
-AVBitStreamFilter ff_mpeg4_unpack_bframes_bsf;
-AVBitStreamFilter ff_mov2textsub_bsf;
-AVBitStreamFilter ff_noise_bsf;
-AVBitStreamFilter ff_remove_extradata_bsf;
-AVBitStreamFilter ff_text2movsub_bsf;
+FFBitStreamFilter ff_aac_adtstoasc_bsf;
+FFBitStreamFilter ff_chomp_bsf;
+FFBitStreamFilter ff_dump_extradata_bsf;
+FFBitStreamFilter ff_h264_mp4toannexb_bsf;
+FFBitStreamFilter ff_hevc_mp4toannexb_bsf;
+FFBitStreamFilter ff_imx_dump_header_bsf;
+FFBitStreamFilter ff_mjpeg2jpeg_bsf;
+FFBitStreamFilter ff_mjpega_dump_header_bsf;
+FFBitStreamFilter ff_mp3_header_decompress_bsf;
+FFBitStreamFilter ff_mpeg4_unpack_bframes_bsf;
+FFBitStreamFilter ff_mov2textsub_bsf;
+FFBitStreamFilter ff_noise_bsf;
+FFBitStreamFilter ff_remove_extradata_bsf;
+FFBitStreamFilter ff_text2movsub_bsf;
 
+void ff_fft_init_aarch64(FFTContext *s) {}
+void ff_fft_init_arm(FFTContext *s) {}
+void ff_fft_init_mips(FFTContext *s) {}
+void ff_fft_init_ppc(FFTContext *s) {}
+void ff_rdft_init_arm(RDFTContext *s) {}
 void ff_h264_pred_init_aarch64(H264PredContext *h, int codec_id,
                                const int bit_depth,
                                const int chroma_format_idc) {}
@@ -860,7 +852,7 @@ void ff_h264_pred_init_arm(H264PredContext *h, int codec_id,
                            const int bit_depth, const int chroma_format_idc) {}
 void ff_h264_pred_init_mips(H264PredContext *h, int codec_id,
                             const int bit_depth, const int chroma_format_idc) {}
-//void ff_me_cmp_init_static(void) {}
+void ff_me_cmp_init_static(void) {}
 int ff_frame_thread_encoder_init(AVCodecContext *avctx, AVDictionary *options) { return 0; }
 void ff_frame_thread_encoder_free(AVCodecContext *avctx) {}
 int ff_thread_video_encode_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame *frame, int *got_packet_ptr) { return 0; }
@@ -876,7 +868,9 @@ void ff_vp8dsp_init_mips(VP8DSPContext *c) {}
 void ff_vp9dsp_init_mips(VP9DSPContext *dsp, int bpp) {}
 void ff_vp9dsp_init_aarch64(VP9DSPContext *dsp, int bpp) {}
 void ff_vp9dsp_init_arm(VP9DSPContext *dsp, int bpp) {}
+#if !defined(__arm__)
 void ff_flacdsp_init_arm(FLACDSPContext *c, enum AVSampleFormat fmt, int channels, int bps) {}
+#endif
 #if !defined(HAVE_64BIT_BUILD)
 void ff_flac_decorrelate_indep8_16_sse2(uint8_t **out, int32_t **in, int channels, int len, int shift) {}
 void ff_flac_decorrelate_indep8_32_avx(uint8_t **out, int32_t **in, int channels, int len, int shift) {}

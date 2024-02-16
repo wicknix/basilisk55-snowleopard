@@ -20,10 +20,11 @@
 #define AVCODEC_ERROR_RESILIENCE_H
 
 #include <stdint.h>
+#include <stdatomic.h>
 
 #include "avcodec.h"
 #include "me_cmp.h"
-#include "thread.h"
+#include "threadframe.h"
 
 ///< current MB is the first after a resync marker
 #define VP_START               1
@@ -51,7 +52,8 @@ typedef struct ERPicture {
 
 typedef struct ERContext {
     AVCodecContext *avctx;
-    MECmpContext mecc;
+
+    me_cmp_func sad;
     int mecc_inited;
 
     int *mb_index2xy;
@@ -60,7 +62,7 @@ typedef struct ERContext {
     ptrdiff_t mb_stride;
     ptrdiff_t b8_stride;
 
-    volatile int error_count;
+    atomic_int error_count;
     int error_occurred;
     uint8_t *error_status_table;
     uint8_t *er_temp_buffer;
@@ -73,14 +75,13 @@ typedef struct ERContext {
     ERPicture last_pic;
     ERPicture next_pic;
 
-    AVBufferRef *ref_index_buf[2];
-    AVBufferRef *motion_val_buf[2];
+    int8_t *ref_index[2];
+    int16_t (*motion_val_base[2])[2];
 
     uint16_t pp_time;
     uint16_t pb_time;
     int quarter_sample;
     int partitioned_frame;
-    int ref_count;
 
     void (*decode_mb)(void *opaque, int ref, int mv_dir, int mv_type,
                       int (*mv)[2][4][2],

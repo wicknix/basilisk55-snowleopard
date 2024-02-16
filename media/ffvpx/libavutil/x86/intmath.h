@@ -47,7 +47,8 @@ static av_always_inline av_const int ff_log2_x86(unsigned int v)
 #   endif
 #   define ff_log2_16bit av_log2
 
-#if defined(__INTEL_COMPILER) || (defined(_MSC_VER) && (_MSC_VER >= 1700))
+#if defined(__INTEL_COMPILER) || (defined(_MSC_VER) && (_MSC_VER >= 1700) && \
+                                  (defined(__BMI__) || !defined(__clang__)))
 #   define ff_ctz(v) _tzcnt_u32(v)
 
 #   if ARCH_X86_64
@@ -109,8 +110,8 @@ static av_always_inline av_const double av_clipd_sse2(double a, double amin, dou
 #if defined(ASSERT_LEVEL) && ASSERT_LEVEL >= 2
     if (amin > amax) abort();
 #endif
-    __asm__ ("minsd %2, %0 \n\t"
-             "maxsd %1, %0 \n\t"
+    __asm__ ("maxsd %1, %0 \n\t"
+             "minsd %2, %0 \n\t"
              : "+&x"(a) : "xm"(amin), "xm"(amax));
     return a;
 }
@@ -125,13 +126,43 @@ static av_always_inline av_const float av_clipf_sse(float a, float amin, float a
 #if defined(ASSERT_LEVEL) && ASSERT_LEVEL >= 2
     if (amin > amax) abort();
 #endif
-    __asm__ ("minss %2, %0 \n\t"
-             "maxss %1, %0 \n\t"
+    __asm__ ("maxss %1, %0 \n\t"
+             "minss %2, %0 \n\t"
              : "+&x"(a) : "xm"(amin), "xm"(amax));
     return a;
 }
 
 #endif /* __SSE__ */
+
+#if defined(__AVX__) && !defined(__INTEL_COMPILER)
+
+#undef av_clipd
+#define av_clipd av_clipd_avx
+static av_always_inline av_const double av_clipd_avx(double a, double amin, double amax)
+{
+#if defined(ASSERT_LEVEL) && ASSERT_LEVEL >= 2
+    if (amin > amax) abort();
+#endif
+    __asm__ ("vmaxsd %1, %0, %0 \n\t"
+             "vminsd %2, %0, %0 \n\t"
+             : "+&x"(a) : "xm"(amin), "xm"(amax));
+    return a;
+}
+
+#undef av_clipf
+#define av_clipf av_clipf_avx
+static av_always_inline av_const float av_clipf_avx(float a, float amin, float amax)
+{
+#if defined(ASSERT_LEVEL) && ASSERT_LEVEL >= 2
+    if (amin > amax) abort();
+#endif
+    __asm__ ("vmaxss %1, %0, %0 \n\t"
+             "vminss %2, %0, %0 \n\t"
+             : "+&x"(a) : "xm"(amin), "xm"(amax));
+    return a;
+}
+
+#endif /* __AVX__ */
 
 #endif /* __GNUC__ */
 

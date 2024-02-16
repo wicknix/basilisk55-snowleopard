@@ -29,14 +29,24 @@
 #include <stdatomic.h>
 
 #include "libavutil/buffer.h"
+#include "libavutil/mem_internal.h"
 #include "libavutil/thread.h"
 
 #include "h264pred.h"
-#include "thread.h"
-#include "vp56.h"
+#include "threadframe.h"
+#include "videodsp.h"
 #include "vp8dsp.h"
+#include "vpx_rac.h"
 
 #define VP8_MAX_QUANT 127
+
+typedef enum {
+    VP8_FRAME_NONE     = -1,
+    VP8_FRAME_CURRENT  =  0,
+    VP8_FRAME_PREVIOUS =  1,
+    VP8_FRAME_GOLDEN   =  2,
+    VP8_FRAME_ALTREF   =  3,
+} VP8FrameType;
 
 enum dct_token {
     DCT_0,
@@ -72,6 +82,11 @@ enum inter_splitmvmode {
     VP8_SPLITMVMODE_NONE,        ///< (only used in prediction) no split MVs
 };
 
+typedef struct VP8mv {
+    DECLARE_ALIGNED(4, int16_t, x);
+    int16_t y;
+} VP8mv;
+
 typedef struct VP8FilterStrength {
     uint8_t filter_level;
     uint8_t inner_limit;
@@ -89,8 +104,8 @@ typedef struct VP8Macroblock {
     uint8_t segment;
     uint8_t intra4x4_pred_mode_mb[16];
     DECLARE_ALIGNED(4, uint8_t, intra4x4_pred_mode_top)[4];
-    VP56mv mv;
-    VP56mv bmv[16];
+    VP8mv mv;
+    VP8mv bmv[16];
 } VP8Macroblock;
 
 typedef struct VP8intmv {
@@ -138,12 +153,18 @@ typedef struct VP8ThreadData {
 typedef struct VP8Frame {
     ThreadFrame tf;
     AVBufferRef *seg_map;
+
+    AVBufferRef *hwaccel_priv_buf;
+    void *hwaccel_picture_private;
 } VP8Frame;
 
 #define MAX_THREADS 8
 typedef struct VP8Context {
     VP8ThreadData *thread_data;
     AVCodecContext *avctx;
+    enum AVPixelFormat pix_fmt;
+    int actually_webp;
+
     VP8Frame *framep[4];
     VP8Frame *next_framep[4];
     VP8Frame *curframe;
@@ -172,6 +193,7 @@ typedef struct VP8Context {
         uint8_t enabled;
         uint8_t absolute_vals;
         uint8_t update_map;
+        uint8_t update_feature_data;
         int8_t base_quant[4];
         int8_t filter_level[4];     ///< base loop filter level
     } segmentation;
@@ -199,8 +221,19 @@ typedef struct VP8Context {
         int16_t chroma_qmul[2];
     } qmat[4];
 
+    // Raw quantisation values, which may be needed by hwaccel decode.
+    struct {
+        int yac_qi;
+        int ydc_delta;
+        int y2dc_delta;
+        int y2ac_delta;
+        int uvdc_delta;
+        int uvac_delta;
+    } quant;
+
     struct {
         uint8_t enabled;    ///< whether each mb can have a different strength based on mode/ref
+        uint8_t update;
 
         /**
          * filter strength adjustment for the following macroblock modes:
@@ -215,10 +248,10 @@ typedef struct VP8Context {
 
         /**
          * filter strength adjustment for macroblocks that reference:
-         * [0] - intra / VP56_FRAME_CURRENT
-         * [1] - VP56_FRAME_PREVIOUS
-         * [2] - VP56_FRAME_GOLDEN
-         * [3] - altref / VP56_FRAME_GOLDEN2
+         * [0] - intra / VP8_FRAME_CURRENT
+         * [1] - VP8_FRAME_PREVIOUS
+         * [2] - VP8_FRAME_GOLDEN
+         * [3] - altref / VP8_FRAME_ALTREF
          */
         int8_t ref[4];
     } lf_delta;
@@ -226,7 +259,21 @@ typedef struct VP8Context {
     uint8_t (*top_border)[16 + 8 + 8];
     uint8_t (*top_nnz)[9];
 
-    VP56RangeCoder c;   ///< header context, includes mb modes and motion vectors
+    VPXRangeCoder c;   ///< header context, includes mb modes and motion vectors
+
+    /* This contains the entropy coder state at the end of the header
+     * block, in the form specified by the standard.  For use by
+     * hwaccels, so that a hardware decoder has the information to
+     * start decoding at the macroblock layer.
+     */
+    struct {
+        const uint8_t *input;
+        uint32_t range;
+        uint32_t value;
+        int bit_count;
+    } coder_state_at_header_end;
+
+    int header_partition_size;
 
     /**
      * These are all of the updatable probabilities for binary decisions.
@@ -249,8 +296,8 @@ typedef struct VP8Context {
 
     VP8Macroblock *macroblocks_base;
     int invisible;
-    int update_last;    ///< update VP56_FRAME_PREVIOUS with the current one
-    int update_golden;  ///< VP56_FRAME_NONE if not updated, or which frame to copy if so
+    int update_last;    ///< update VP8_FRAME_PREVIOUS with the current one
+    int update_golden;  ///< VP8_FRAME_NONE if not updated, or which frame to copy if so
     int update_altref;
 
     /**
@@ -264,7 +311,8 @@ typedef struct VP8Context {
      * There can be 1, 2, 4, or 8 of these after the header context.
      */
     int num_coeff_partitions;
-    VP56RangeCoder coeff_partition[8];
+    VPXRangeCoder coeff_partition[8];
+    int coeff_partition_size[8];
     VideoDSPContext vdsp;
     VP8DSPContext vp8dsp;
     H264PredContext hpc;
@@ -288,14 +336,9 @@ typedef struct VP8Context {
     int vp7;
 
     /**
-     * Fade bit present in bitstream (VP7)
-     */
-    int fade_present;
-
-    /**
      * Interframe DC prediction (VP7)
-     * [0] VP56_FRAME_PREVIOUS
-     * [1] VP56_FRAME_GOLDEN
+     * [0] VP8_FRAME_PREVIOUS
+     * [1] VP8_FRAME_GOLDEN
      */
     uint16_t inter_dc_pred[2][2];
 
@@ -310,8 +353,8 @@ typedef struct VP8Context {
 
 int ff_vp8_decode_init(AVCodecContext *avctx);
 
-int ff_vp8_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
-                        AVPacket *avpkt);
+int ff_vp8_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+                        int *got_frame, AVPacket *avpkt);
 
 int ff_vp8_decode_free(AVCodecContext *avctx);
 

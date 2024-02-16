@@ -28,7 +28,7 @@
 #include "common.h"
 #include "eval.h"
 #include "log.h"
-#include "ff_random_seed.h"
+/* #include "random_seed.h" */
 #include "time_internal.h"
 #include "parseutils.h"
 #include "fftime.h"
@@ -102,6 +102,7 @@ static const VideoSizeAbbr video_size_abbrs[] = {
     { "wsxga",    1600,1024 },
     { "wuxga",    1920,1200 },
     { "woxga",    2560,1600 },
+    { "wqhd",     2560,1440 },
     { "wqsxga",   3200,2048 },
     { "wquxga",   3840,2400 },
     { "whsxga",   6400,4096 },
@@ -111,6 +112,7 @@ static const VideoSizeAbbr video_size_abbrs[] = {
     { "hd480",     852, 480 },
     { "hd720",    1280, 720 },
     { "hd1080",   1920,1080 },
+    { "quadhd",   2560,1440 },
     { "2k",       2048,1080 }, /* Digital Cinema System Specification */
     { "2kdci",    2048,1080 },
     { "2kflat",   1998,1080 },
@@ -373,7 +375,7 @@ int av_parse_color(uint8_t *rgba_color, const char *color_string, int slen,
     rgba_color[3] = 255;
 
     if (!av_strcasecmp(color_string2, "random") || !av_strcasecmp(color_string2, "bikeshed")) {
-        int rgba = av_get_random_seed();
+        int rgba = 0xffffffff; /* av_get_random_seed(); */
         rgba_color[0] = rgba >> 24;
         rgba_color[1] = rgba >> 16;
         rgba_color[2] = rgba >> 8;
@@ -504,7 +506,7 @@ char *av_small_strptime(const char *p, const char *fmt, struct tm *dt)
         switch(c) {
         case 'H':
         case 'J':
-            val = date_get_num(&p, 0, c == 'H' ? 23 : INT_MAX, 2);
+            val = date_get_num(&p, 0, c == 'H' ? 23 : INT_MAX, c == 'H' ? 2 : 4);
 
             if (val == -1)
                 return NULL;
@@ -590,7 +592,7 @@ int av_parse_time(int64_t *timeval, const char *timestr, int duration)
     int64_t t, now64;
     time_t now;
     struct tm dt = { 0 }, tmbuf;
-    int today = 0, negative = 0, microseconds = 0;
+    int today = 0, negative = 0, microseconds = 0, suffix = 1000000;
     int i;
     static const char * const date_fmt[] = {
         "%Y - %m - %d",
@@ -661,12 +663,15 @@ int av_parse_time(int64_t *timeval, const char *timestr, int duration)
         if (!q) {
             char *o;
             /* parse timestr as S+ */
-            dt.tm_sec = strtol(p, &o, 10);
+            errno = 0;
+            t = strtoll(p, &o, 10);
             if (o == p) /* the parsing didn't succeed */
                 return AVERROR(EINVAL);
-            dt.tm_min = 0;
-            dt.tm_hour = 0;
+            if (errno == ERANGE)
+                return AVERROR(ERANGE);
             q = o;
+        } else {
+            t = dt.tm_hour * 3600 + dt.tm_min * 60 + dt.tm_sec;
         }
     }
 
@@ -688,7 +693,16 @@ int av_parse_time(int64_t *timeval, const char *timestr, int duration)
     }
 
     if (duration) {
-        t = dt.tm_hour * 3600 + dt.tm_min * 60 + dt.tm_sec;
+        if (q[0] == 'm' && q[1] == 's') {
+            suffix = 1000;
+            microseconds /= 1000;
+            q += 2;
+        } else if (q[0] == 'u' && q[1] == 's') {
+            suffix = 1;
+            microseconds = 0;
+            q += 2;
+        } else if (*q == 's')
+            q++;
     } else {
         int is_utc = *q == 'Z' || *q == 'z';
         int tzoffset = 0;
@@ -724,8 +738,14 @@ int av_parse_time(int64_t *timeval, const char *timestr, int duration)
     if (*q)
         return AVERROR(EINVAL);
 
-    t *= 1000000;
+    if (INT64_MAX / suffix < t || t < INT64_MIN / suffix)
+        return AVERROR(ERANGE);
+    t *= suffix;
+    if (INT64_MAX - microseconds < t)
+        return AVERROR(ERANGE);
     t += microseconds;
+    if (t == INT64_MIN && negative)
+        return AVERROR(ERANGE);
     *timeval = negative ? -t : t;
     return 0;
 }
