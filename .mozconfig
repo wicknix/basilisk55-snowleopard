@@ -1,16 +1,22 @@
 ac_add_options --target=i386-apple-darwin10
 HOST_CC=clang
 HOST_CXX=clang++
-export CC="clang -mssse3 -mpclmul -femulated-tls"
-export CFLAGS="-mssse3 -mpclmul -femulated-tls"
-export CXXFLAGS="-mssse3 -mpclmul -femulated-tls"
-export CXX="clang++ -std=gnu++14 -mssse3 -mpclmul -femulated-tls"
+#export CC="clang -mssse3 -mpclmul -femulated-tls"
+#export CFLAGS="-mssse3 -mpclmul -femulated-tls"
+#export CXXFLAGS="-mssse3 -mpclmul -femulated-tls"
+#export CXX="clang++ -std=gnu++14 -mssse3 -mpclmul -femulated-tls"
+export CC="clang -mpclmul -femulated-tls"
+export CFLAGS=" -mpclmul -femulated-tls"
+export CXXFLAGS=" -mpclmul -femulated-tls"
+export CXX="clang++ -std=gnu++14 -mpclmul -femulated-tls"
 TARGET_CPU=i386
 # It's not strictly necessary to specify -arch during native builds, but it
 # makes the merged about:buildconfig easier to follow, and it reduces
 # conditionalized differences between builds.
-CC="clang -arch $TARGET_CPU -march=core2 -mssse3 -mpclmul"
-CXX="clang++ -arch $TARGET_CPU -march=core2 -mssse3 -mpclmul"
+#CC="clang -arch $TARGET_CPU -march=core2 -mssse3 -mpclmul"
+#CXX="clang++ -arch $TARGET_CPU -march=core2 -mssse3 -mpclmul"
+CC="clang -arch $TARGET_CPU -march=yonah -mpclmul"
+CXX="clang++ -arch $TARGET_CPU -march=yonah -mpclmul"
 
 # These must be set for cross builds, and don't hurt straight builds.
 RANLIB="${TOOLCHAIN_PREFIX}ranlib"
