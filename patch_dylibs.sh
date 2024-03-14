@@ -7,7 +7,7 @@ if [ "$#" -ne 2 ]; then
 fi
 
 build_folder="$1"
-nightly_app="${build_folder}/dist/basilisk/Nightly.app"
+nightly_app="${build_folder}/dist/basilisk/InterWeb.app"
 dylib_folder="$2"
 
 # 1. Copy dylibs from the specified folder
