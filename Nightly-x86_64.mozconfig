@@ -48,3 +48,5 @@ ac_add_options --disable-webrtc
 export MOZ_TELEMETRY_REPORTING=0
 export MOZ_ADDON_SIGNING=0
 export MOZ_REQUIRE_SIGNING=0
+export MOZ_BUNDLED_FONTS=1
+MOZ_BUNDLED_FONTS=1
