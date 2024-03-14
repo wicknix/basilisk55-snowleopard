@@ -44,6 +44,8 @@ ac_add_options --disable-maintenance-service
 ac_add_options --disable-updater
 ac_add_options --with-system-zlib
 ac_add_options --disable-webrtc
+ac_add_options --with-branding=application/basilisk/branding/interweb
+ac_add_options --with-distribution-id=com.jazzzny
 
 export MOZ_TELEMETRY_REPORTING=0
 export MOZ_ADDON_SIGNING=0
