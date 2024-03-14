@@ -7,16 +7,21 @@
 
 /* libcubeb api/function exhaustive test. Plays a series of tones in different
  * conditions. */
-#include "gtest/gtest.h"
-#if !defined(_XOPEN_SOURCE)
-#define _XOPEN_SOURCE 600
+#ifdef NDEBUG
+#undef NDEBUG
 #endif
+#define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 #include <string.h>
+
 #include "cubeb/cubeb.h"
 #include "common.h"
+#ifdef CUBEB_GECKO_BUILD
+#include "TestHarness.h"
+#endif
 
 #define MAX_NUM_CHANNELS 32
 
@@ -24,6 +29,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#define NELEMS(x) ((int) (sizeof(x) / sizeof(x[0])))
 #define VOLUME 0.2
 
 float get_frequency(int channel_index)
@@ -93,7 +99,7 @@ long data_cb_short(cubeb_stream * /*stream*/, void * user, const void * /*inputb
   return nframes;
 }
 
-void state_cb_audio(cubeb_stream * /*stream*/, void * /*user*/, cubeb_state /*state*/)
+void state_cb(cubeb_stream * /*stream*/, void * /*user*/, cubeb_state /*state*/)
 {
 }
 
@@ -117,7 +123,7 @@ int supports_channel_count(const char* backend_id, int nchannels)
     (strcmp(backend_id, "opensl") != 0 && strcmp(backend_id, "audiotrack") != 0);
 }
 
-int run_test(int num_channels, layout_info layout, int sampling_rate, int is_float)
+int run_test(int num_channels, int sampling_rate, int is_float)
 {
   int r = CUBEB_OK;
 
@@ -141,13 +147,12 @@ int run_test(int num_channels, layout_info layout, int sampling_rate, int is_flo
     goto cleanup;
   }
 
-  fprintf(stderr, "Testing %d channel(s), layout: %s, %d Hz, %s (%s)\n", num_channels, layout.name, sampling_rate, is_float ? "float" : "short", cubeb_get_backend_id(ctx));
+  fprintf(stderr, "Testing %d channel(s), %d Hz, %s (%s)\n", num_channels, sampling_rate, is_float ? "float" : "short", cubeb_get_backend_id(ctx));
 
   cubeb_stream_params params;
   params.format = is_float ? CUBEB_SAMPLE_FLOAT32NE : CUBEB_SAMPLE_S16NE;
   params.rate = sampling_rate;
   params.channels = num_channels;
-  params.layout = layout.layout;
 
   synth = synth_create(params.channels, params.rate);
   if (synth == NULL) {
@@ -156,7 +161,7 @@ int run_test(int num_channels, layout_info layout, int sampling_rate, int is_flo
   }
 
   r = cubeb_stream_init(ctx, &stream, "test tone", NULL, NULL, NULL, &params,
-                        4096, is_float ? data_cb_float : data_cb_short, state_cb_audio, synth);
+                        4096, is_float ? data_cb_float : data_cb_short, state_cb, synth);
   if (r != CUBEB_OK) {
     fprintf(stderr, "Error initializing cubeb stream: %d\n", r);
     goto cleanup;
@@ -200,7 +205,6 @@ int run_panning_volume_test(int is_float)
   params.format = is_float ? CUBEB_SAMPLE_FLOAT32NE : CUBEB_SAMPLE_S16NE;
   params.rate = 44100;
   params.channels = 2;
-  params.layout = CUBEB_LAYOUT_STEREO;
 
   synth = synth_create(params.channels, params.rate);
   if (synth == NULL) {
@@ -210,7 +214,7 @@ int run_panning_volume_test(int is_float)
 
   r = cubeb_stream_init(ctx, &stream, "test tone", NULL, NULL, NULL, &params,
                         4096, is_float ? data_cb_float : data_cb_short,
-                        state_cb_audio, synth);
+                        state_cb, synth);
   if (r != CUBEB_OK) {
     fprintf(stderr, "Error initializing cubeb stream: %d\n", r);
     goto cleanup;
@@ -231,7 +235,7 @@ int run_panning_volume_test(int is_float)
   fprintf(stderr, "Testing: panning\n");
   for(int i=-4;i <= 4; ++i)
   {
-    fprintf(stderr, "Panning: %.2f\n", i/4.0f);
+    fprintf(stderr, "Panning: %.2f%%\n", i/4.0f);
 
     cubeb_stream_set_panning(stream, i/4.0f);
     cubeb_stream_start(stream);
@@ -248,19 +252,9 @@ cleanup:
   return r;
 }
 
-TEST(cubeb, run_panning_volume_test_short)
+void run_channel_rate_test()
 {
-  ASSERT_EQ(run_panning_volume_test(0), CUBEB_OK);
-}
-
-TEST(cubeb, run_panning_volume_test_float)
-{
-  ASSERT_EQ(run_panning_volume_test(1), CUBEB_OK);
-}
-
-TEST(cubeb, run_channel_rate_test)
-{
-  unsigned int channel_values[] = {
+  int channel_values[] = {
     1,
     2,
     3,
@@ -275,16 +269,26 @@ TEST(cubeb, run_channel_rate_test)
     48000,
   };
 
-  for(unsigned int j = 0; j < ARRAY_LENGTH(channel_values); ++j) {
-    for(unsigned int i = 0; i < ARRAY_LENGTH(freq_values); ++i) {
-      ASSERT_TRUE(channel_values[j] < MAX_NUM_CHANNELS);
+  for(int j = 0; j < NELEMS(channel_values); ++j) {
+    for(int i = 0; i < NELEMS(freq_values); ++i) {
+      assert(channel_values[j] < MAX_NUM_CHANNELS);
       fprintf(stderr, "--------------------------\n");
-      for (unsigned int k = 0 ; k < ARRAY_LENGTH(layout_infos); ++k ) {
-        if (layout_infos[k].channels == channel_values[j]) {
-          ASSERT_EQ(run_test(channel_values[j], layout_infos[k], freq_values[i], 0), CUBEB_OK);
-          ASSERT_EQ(run_test(channel_values[j], layout_infos[k], freq_values[i], 1), CUBEB_OK);
-        }
-      }
+      assert(run_test(channel_values[j], freq_values[i], 0) == CUBEB_OK);
+      assert(run_test(channel_values[j], freq_values[i], 1) == CUBEB_OK);
     }
   }
+}
+
+
+int main(int /*argc*/, char * /*argv*/[])
+{
+#ifdef CUBEB_GECKO_BUILD
+  ScopedXPCOM xpcom("test_audio");
+#endif
+
+  assert(run_panning_volume_test(0) == CUBEB_OK);
+  assert(run_panning_volume_test(1) == CUBEB_OK);
+  run_channel_rate_test();
+
+  return CUBEB_OK;
 }

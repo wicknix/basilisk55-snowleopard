@@ -1,25 +1,25 @@
 # HG changeset patch
 # User Alex Chronopoulos <achronop@gmail.com>
-# Parent  1c202d2bb24197c9f31d96998477f485acc85be4
-Bug 1342363 - Uplift wasapi fixes in Aurora. r?kinetik
+# Parent  b7bb31e5a851d6f8e142c39dc077e3774719eced
+Bug 1342363 - Uplift wasapi fixes in Beta. r?kinetik
 
 diff --git a/media/libcubeb/src/cubeb_wasapi.cpp b/media/libcubeb/src/cubeb_wasapi.cpp
 --- a/media/libcubeb/src/cubeb_wasapi.cpp
 +++ b/media/libcubeb/src/cubeb_wasapi.cpp
-@@ -866,16 +866,21 @@ wasapi_stream_render_loop(LPVOID stream)
+@@ -807,16 +807,20 @@ wasapi_stream_render_loop(LPVOID stream)
       maybe WebRTC. */
    mmcss_handle =
      stm->context->set_mm_thread_characteristics("Audio", &mmcss_task_index);
    if (!mmcss_handle) {
      /* This is not fatal, but we might glitch under heavy load. */
-     LOG("Unable to use mmcss to bump the render thread priority: %lx", GetLastError());
+     LOG("Unable to use mmcss to bump the render thread priority: %x", GetLastError());
    }
  
 +  // This has already been nulled out, simply exit.
 +  if (!emergency_bailout) {
 +    is_playing = false;
 +  }
-+
+ 
    /* WaitForMultipleObjects timeout can trigger in cases where we don't want to
       treat it as a timeout, such as across a system sleep/wake cycle.  Trigger
       the timeout error handling only when the timeout_limit is reached, which is
@@ -27,8 +27,7 @@ diff --git a/media/libcubeb/src/cubeb_wasapi.cpp b/media/libcubeb/src/cubeb_wasa
    unsigned timeout_count = 0;
    const unsigned timeout_limit = 5;
    while (is_playing) {
-     DWORD waitResult = WaitForMultipleObjects(ARRAY_LENGTH(wait_array),
-@@ -1206,22 +1211,26 @@ bool stop_and_join_render_thread(cubeb_s
+@@ -1158,22 +1162,26 @@ bool stop_and_join_render_thread(cubeb_s
  
    /* Wait five seconds for the rendering thread to return. It's supposed to
     * check its event loop very often, five seconds is rather conservative. */
@@ -40,14 +39,14 @@ diff --git a/media/libcubeb/src/cubeb_wasapi.cpp b/media/libcubeb/src/cubeb_wasa
 +    // We give the ownership to the rendering thread.
 +    stm->emergency_bailout = nullptr;
      LOG("Destroy WaitForSingleObject on thread timed out,"
-         " leaking the thread: %lx", GetLastError());
+         " leaking the thread: %d", GetLastError());
      rv = false;
    }
    if (r == WAIT_FAILED) {
      *(stm->emergency_bailout) = true;
 +    // We give the ownership to the rendering thread.
 +    stm->emergency_bailout = nullptr;
-     LOG("Destroy WaitForSingleObject on thread failed: %lx", GetLastError());
+     LOG("Destroy WaitForSingleObject on thread failed: %d", GetLastError());
      rv = false;
    }
  
@@ -55,54 +54,27 @@ diff --git a/media/libcubeb/src/cubeb_wasapi.cpp b/media/libcubeb/src/cubeb_wasa
    // Only attempts to close and null out the thread and event if the
    // WaitForSingleObject above succeeded, so that calling this function again
    // attemps to clean up the thread and event each time.
-@@ -1642,18 +1651,25 @@ int setup_wasapi_stream(cubeb_stream * s
-                                       stm->input_available_event,
-                                       stm->capture_client,
-                                       &stm->input_mix_params);
- 
-     // We initializing an input stream, buffer ahead two buffers worth of silence.
-     // This delays the input side slightly, but allow to not glitch when no input
-     // is available when calling into the resampler to call the callback: the input
-     // refill event will be set shortly after to compensate for this lack of data.
-+    // In debug, four buffers are used, to avoid tripping up assertions down the line.
-+#if !defined(NDEBUG)
-+    const int silent_buffer_count = 2;
-+#else
-+    const int silent_buffer_count = 4;
-+#endif
-     stm->linear_input_buffer.push_silence(stm->input_buffer_frame_count *
--                                          stm->input_stream_params.channels * 2);
-+                                          stm->input_stream_params.channels *
-+                                          silent_buffer_count);
- 
-     if (rv != CUBEB_OK) {
-       LOG("Failure to open the input side.");
-       return rv;
-     }
-   }
- 
-   if (has_output(stm)) {
-@@ -1864,19 +1880,16 @@ void wasapi_stream_destroy(cubeb_stream 
+@@ -1798,19 +1806,16 @@ void wasapi_stream_destroy(cubeb_stream 
    XASSERT(stm);
  
-   // Only free stm->emergency_bailout if we could join the thread.
-   // If we could not join the thread, stm->emergency_bailout is true
+   // Only free stm->emergency_bailout if we could not join the thread.
+   // If we could not join the thread, stm->emergency_bailout is true 
    // and is still alive until the thread wakes up and exits cleanly.
    if (stop_and_join_render_thread(stm)) {
      delete stm->emergency_bailout.load();
      stm->emergency_bailout = nullptr;
 -  } else {
 -    // If we're leaking, it must be that this is true.
--    XASSERT(*(stm->emergency_bailout));
+-    assert(*(stm->emergency_bailout));
    }
  
    unregister_notification_client(stm);
  
-   CloseHandle(stm->reconfigure_event);
-   CloseHandle(stm->refill_event);
-   CloseHandle(stm->input_available_event);
+   SafeRelease(stm->reconfigure_event);
+   SafeRelease(stm->refill_event);
+   SafeRelease(stm->input_available_event);
  
-@@ -1928,21 +1941,21 @@ int stream_start_one_side(cubeb_stream *
+@@ -1865,21 +1870,21 @@ int stream_start_one_side(cubeb_stream *
      return CUBEB_ERROR;
    }
  
@@ -126,10 +98,10 @@ diff --git a/media/libcubeb/src/cubeb_wasapi.cpp b/media/libcubeb/src/cubeb_wasa
        return rv;
      }
    }
-@@ -1994,16 +2007,17 @@ int wasapi_stream_stop(cubeb_stream * st
-         return CUBEB_ERROR;
+@@ -1932,16 +1937,17 @@ int wasapi_stream_stop(cubeb_stream * st
        }
      }
+ 
  
      stm->state_callback(stm, stm->user_ptr, CUBEB_STATE_STOPPED);
    }

@@ -1,3 +1,4 @@
+
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -465,9 +466,9 @@ private:
    * This is called when the output device used by the cubeb stream changes. */
   void DeviceChangedCallback();
   /* Start the cubeb stream */
-  bool StartStream();
+  void StartStream();
   friend class AsyncCubebTask;
-  bool Init();
+  void Init();
   /* MediaStreamGraphs are always down/up mixed to stereo for now. */
   static const uint32_t ChannelCount = 2;
   /* The size of this buffer comes from the fact that some audio backends can
