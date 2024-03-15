@@ -42,14 +42,14 @@ pref("xpinstall.customConfirmationUI", true);
 // Preferences for AMO integration
 pref("extensions.getAddons.cache.enabled", false);
 pref("extensions.getAddons.maxResults", 15);
-pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/firefox/api/%API_VERSION%/search/guid:%IDS%?src=firefox&appOS=%OS%&appVersion=%VERSION%");
-pref("extensions.getAddons.getWithPerformance.url", "https://services.addons.mozilla.org/%LOCALE%/firefox/api/%API_VERSION%/search/guid:%IDS%?src=firefox&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
-pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/firefox/search?q=%TERMS%&platform=%OS%&appver=%VERSION%");
-pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/firefox/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%/%COMPATIBILITY_MODE%?src=firefox");
-pref("extensions.webservice.discoverURL", "https://discovery.addons.mozilla.org/%LOCALE%/firefox/discovery/pane/%VERSION%/%OS%/%COMPATIBILITY_MODE%");
-pref("extensions.getAddons.recommended.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/list/recommended/all/%MAX_RESULTS%/%OS%/%VERSION%?src=firefox");
-pref("extensions.getAddons.link.url", "https://addons.mozilla.org/%LOCALE%/firefox/");
-pref("extensions.getAddons.themes.browseURL", "https://addons.mozilla.org/%LOCALE%/firefox/themes/?src=firefox");
+pref("extensions.getAddons.get.url", "https://addons.basilisk-browser.org");
+pref("extensions.getAddons.getWithPerformance.url", " ");
+pref("extensions.getAddons.search.browseURL", " ");
+pref("extensions.getAddons.search.url", " ");
+pref("extensions.webservice.discoverURL", " ");
+pref("extensions.getAddons.recommended.url", " ");
+pref("extensions.getAddons.link.url", "https://addons.basilisk-browser.org");
+pref("extensions.getAddons.themes.browseURL", "https://addons.basilisk-browser.org/themes/");
 
 pref("extensions.update.autoUpdateDefault", true);
 
@@ -72,7 +72,7 @@ pref("xpinstall.signatures.required", false);
 pref("xpinstall.signatures.devInfoURL", "https://wiki.mozilla.org/Addons/Extension_Signing");
 
 // Dictionary download preference
-pref("browser.dictionaries.download.url", "https://addons.mozilla.org/%LOCALE%/firefox/dictionaries/");
+pref("browser.dictionaries.download.url", "https://archive.palemoon.org/palemoon/dictionaries/");
 
 // At startup, should we check to see if the installation
 // date is older than some threshold
@@ -168,7 +168,7 @@ pref("extensions.{972ce4c6-7e08-4474-a285-3208198ce6fd}.name", "chrome://browser
 pref("extensions.{972ce4c6-7e08-4474-a285-3208198ce6fd}.description", "chrome://browser/locale/browser.properties");
 
 pref("lightweightThemes.update.enabled", true);
-pref("lightweightThemes.getMoreURL", "https://addons.mozilla.org/%LOCALE%/firefox/themes");
+pref("lightweightThemes.getMoreURL", "https://addons.basilisk-browser.org/themes");
 pref("lightweightThemes.recommendedThemes", "");
 
 // Enable the UI for Encrypted Media Extensions (EME)
@@ -182,8 +182,8 @@ pref("browser.eme.ui.enabled", false);
 pref("browser.uitour.enabled", false);
 pref("browser.uitour.loglevel", "Error");
 pref("browser.uitour.requireSecure", true);
-pref("browser.uitour.themeOrigin", "https://addons.mozilla.org/%LOCALE%/firefox/themes/");
-pref("browser.uitour.url", "https://www.mozilla.org/%LOCALE%/firefox/%VERSION%/tour/");
+pref("browser.uitour.themeOrigin", "https://addons.basilisk-browser.org/themes/");
+pref("browser.uitour.url", " ");
 // How long to show a Hearbeat survey (two hours, in seconds)
 pref("browser.uitour.surveyDuration", 0);
 
@@ -233,7 +233,7 @@ pref("browser.slowStartup.maxSamples", 5);
 // This url, if changed, MUST continue to point to an https url. Pulling arbitrary content to inject into
 // this page over http opens us up to a man-in-the-middle attack that we'd rather not face. If you are a downstream
 // repackager of this code using an alternate snippet url, please keep your users safe
-pref("browser.aboutHomeSnippets.updateUrl", "https://snippets.cdn.mozilla.net/%STARTPAGE_VERSION%/%NAME%/%VERSION%/%APPBUILDID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/");
+pref("browser.aboutHomeSnippets.updateUrl", "https://duckduckgo.com");
 
 pref("browser.enable_automatic_image_resizing", true);
 pref("browser.casting.enabled", false);
@@ -356,7 +356,7 @@ pref("browser.helperApps.deleteTempFileOnExit", true);
 #endif
 
 // search engines URL
-pref("browser.search.searchEnginesURL",      "https://addons.mozilla.org/%LOCALE%/firefox/search-engines/");
+pref("browser.search.searchEnginesURL",      "https://addons.basilisk-browser.org/search-plugins/");
 
 // pointer to the default engine name
 pref("browser.search.defaultenginename",      "chrome://browser-region/locale/region.properties");
@@ -921,13 +921,13 @@ pref("browser.zoom.updateBackgroundTabs", true);
 pref("breakpad.reportURL", "");
 
 // base URL for web-based support pages
-pref("app.support.baseURL", "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/");
+pref("app.support.baseURL", "https://github.com/jazzzny/basilisk55-snowleopard/");
 
 // a11y conflicts with e10s support page
 pref("app.support.e10sAccessibilityUrl", "https://support.mozilla.org/1/firefox/%VERSION%/%OS%/%LOCALE%/accessibility-ppt");
 
 // base url for web-based feedback pages
-pref("app.feedback.baseURL", "https://msfn.org/board/forum/201-browsers-working-on-older-nt-family-oses/");
+pref("app.feedback.baseURL", "https://github.com/jazzzny/basilisk55-snowleopard/");
 
 // Name of alternate about: page for certificate errors (when undefined, defaults to about:neterror)
 pref("security.alternate_certificate_error_page", "certerror");
