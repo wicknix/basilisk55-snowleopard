@@ -17,7 +17,6 @@ cp $1/src/cubeb_audiounit.cpp src
 cp $1/src/cubeb_osx_run_loop.h src
 cp $1/src/cubeb_jack.cpp src
 cp $1/src/cubeb_opensl.c src
-cp $1/src/cubeb_array_queue.h src
 cp $1/src/cubeb_panner.cpp src
 cp $1/src/cubeb_panner.h src
 cp $1/src/cubeb_pulse.c src
@@ -31,20 +30,16 @@ cp $1/src/cubeb_utils_unix.h src
 cp $1/src/cubeb_utils_win.h src
 cp $1/src/cubeb_wasapi.cpp src
 cp $1/src/cubeb_winmm.c src
-cp $1/src/cubeb_mixer.h src
-cp $1/src/cubeb_mixer.cpp src
-cp $1/test/common.h gtest
-cp $1/test/test_audio.cpp gtest
-cp $1/test/test_devices.cpp gtest
-cp $1/test/test_duplex.cpp gtest
-cp $1/test/test_latency.cpp gtest
-cp $1/test/test_record.cpp gtest
-cp $1/test/test_resampler.cpp gtest
-cp $1/test/test_ring_array.cpp gtest
-cp $1/test/test_sanity.cpp gtest
-cp $1/test/test_tone.cpp gtest
-cp $1/test/test_utils.cpp gtest
-cp $1/test/test_mixer.cpp gtest
+cp $1/test/common.h tests/common.h
+cp $1/test/test_audio.cpp tests/test_audio.cpp
+#cp $1/test/test_devices.c tests/test_devices.cpp
+cp $1/test/test_duplex.cpp tests/test_duplex.cpp
+cp $1/test/test_latency.cpp tests/test_latency.cpp
+cp $1/test/test_record.cpp tests/test_record.cpp
+cp $1/test/test_resampler.cpp tests/test_resampler.cpp
+cp $1/test/test_sanity.cpp tests/test_sanity.cpp
+cp $1/test/test_tone.cpp tests/test_tone.cpp
+cp $1/test/test_utils.cpp tests/test_utils.cpp
 
 if [ -d $1/.git ]; then
   rev=$(cd $1 && git rev-parse --verify HEAD)
@@ -64,22 +59,31 @@ else
 fi
 
 echo "Applying a patch on top of $version"
-patch -p1 < ./wasapi-drift-fix-passthrough-resampler.patch
+patch -p1 < ./unresampled-frames.patch
 
 echo "Applying a patch on top of $version"
-patch -p1 < ./audiounit-drift-fix.patch
+patch -p1 < ./bug1302231_emergency_bailout.patch
 
 echo "Applying a patch on top of $version"
-patch -p1 < ./uplift-wasapi-fixes-aurora.patch
+patch -p1 < ./osx-linearize-operations.patch
+
+echo "Applying a patch on top of $version"
+patch -p1 < ./prevent-double-free.patch
+
+echo "Applying a patch on top of $version"
+patch -p1 < ./bug1292803_pulse_assert.patch
+
+echo "Applying a patch on top of $version"
+patch -p1 < ./uplift-wasapi-part-to-beta.patch
 
 echo "Applying a patch on top of $version"
 patch -p3 < ./fix-crashes.patch
 
 echo "Applying a patch on top of $version"
-patch -p3 < ./uplift-part-of-bug-1345049.patch
+patch -p3 < ./uplift-part-of-f07ee6d-esr52.patch
 
 echo "Applying a patch on top of $version"
-patch -p3 < ./beta-crashfix-device-unplug.patch
+patch -p3 < ./uplift-system-listener-patch.patch
 
 echo "Applying a patch on top of $version"
-patch -p3 < ./disable-assert.patch
+patch -p1 < ./uplift-patch-7a4c711.patch

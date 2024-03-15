@@ -1,3 +1,4 @@
+
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,6 +17,10 @@
 #include "mozilla/UniquePtr.h"
 #include "CubebUtils.h"
 #include "soundtouch/SoundTouchFactory.h"
+#ifdef XP_SOLARIS
+#include "soundtouch/SoundTouch.h"
+#endif
+
 
 namespace mozilla {
 
@@ -187,10 +192,9 @@ public:
   explicit AudioStream(DataSource& aSource);
 
   // Initialize the audio stream. aNumChannels is the number of audio
-  // channels (1 for mono, 2 for stereo, etc), aChannelMap is the indicator for
-  // channel layout(mono, stereo, 5.1 or 7.1 ) and aRate is the sample rate
+  // channels (1 for mono, 2 for stereo, etc) and aRate is the sample rate
   // (22050Hz, 44100Hz, etc).
-  nsresult Init(uint32_t aNumChannels, uint32_t aChannelMap, uint32_t aRate,
+  nsresult Init(uint32_t aNumChannels, uint32_t aRate,
                 const dom::AudioChannel aAudioStreamChannel);
 
   // Closes the stream. All future use of the stream is an error.
@@ -222,11 +226,6 @@ public:
   static uint32_t GetPreferredRate()
   {
     return CubebUtils::PreferredSampleRate();
-  }
-
-  static uint32_t GetPreferredChannelMap(uint32_t aChannels)
-  {
-    return CubebUtils::PreferredChannelMap(aChannels);
   }
 
   uint32_t GetOutChannels() { return mOutChannels; }

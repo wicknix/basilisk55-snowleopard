@@ -28,7 +28,7 @@ OTOOL="${TOOLCHAIN_PREFIX}otool"
 export CC CXX HOST_CC HOST_CXX RANLIB AR AS LD STRIP OTOOL
 
 CROSS_COMPILE=1
-ac_add_options --enable-macos-target=10.7
+ac_add_options --enable-macos-target=10.6
 ac_add_options --with-macos-sdk=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
 ac_add_options --enable-application=browser
 ac_add_options --enable-optimize="-O3 -w"
@@ -38,13 +38,16 @@ ac_add_options --enable-strip
 ac_add_options --disable-debug
 ac_add_options --disable-crashreporter
 ac_add_options --enable-jemalloc
-ac_add_options --disable-pulseaudio
 ac_add_options --enable-js-lto
 ac_add_options --disable-maintenance-service
 ac_add_options --disable-updater
 ac_add_options --with-system-zlib
 ac_add_options --disable-webrtc
+ac_add_options --with-branding=application/basilisk/branding/interweb
+ac_add_options --with-distribution-id=com.jazzzny
 
 export MOZ_TELEMETRY_REPORTING=0
 export MOZ_ADDON_SIGNING=0
 export MOZ_REQUIRE_SIGNING=0
+export MOZ_BUNDLED_FONTS=1
+MOZ_BUNDLED_FONTS=1

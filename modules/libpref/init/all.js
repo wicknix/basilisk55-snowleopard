@@ -3753,6 +3753,8 @@ pref("browser.drag_out_of_frame_style", 1);
 pref("ui.key.saveLink.shift", false); // true = shift, false = meta
 
 pref("font.name-list.emoji", "Apple Color Emoji");
+pref("font.name-list.emoji", "Twemoji Mozilla");
+
 
 // default fonts (in UTF8 and using canonical names)
 // to determine canonical font names, use a debug build and
