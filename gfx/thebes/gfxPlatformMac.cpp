@@ -173,6 +173,7 @@ static const char kFontArialUnicodeMS[] = "Arial Unicode MS";
 static const char kFontAppleBraille[] = "Apple Braille";
 static const char kFontAppleColorEmoji[] = "Apple Color Emoji";
 static const char kFontAppleSymbols[] = "Apple Symbols";
+static const char kFontTwemojiMozilla[] = "Twemoji Mozilla";
 static const char kFontDevanagariSangamMN[] = "Devanagari Sangam MN";
 static const char kFontEuphemiaUCAS[] = "Euphemia UCAS";
 static const char kFontGeneva[] = "Geneva";
@@ -208,6 +209,7 @@ gfxPlatformMac::GetCommonFallbackFonts(uint32_t aCh, uint32_t aNextCh,
             emoji == EmojiPresentation::EmojiDefault)) {
             // if char is followed by VS16, try for a color emoji glyph
             aFontList.AppendElement(kFontAppleColorEmoji);
+            aFontList.AppendElement(kFontTwemojiMozilla);
         }
     }
 
@@ -295,6 +297,7 @@ gfxPlatformMac::GetCommonFallbackFonts(uint32_t aCh, uint32_t aNextCh,
             aFontList.AppendElement(kFontSTIXGeneral);
             aFontList.AppendElement(kFontGeneva);
             aFontList.AppendElement(kFontAppleColorEmoji);
+            aFontList.AppendElement(kFontTwemojiMozilla);
             break;
         case 0x2c:
             aFontList.AppendElement(kFontGeneva);
