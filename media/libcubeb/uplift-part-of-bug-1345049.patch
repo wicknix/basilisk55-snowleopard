@@ -1,12 +1,11 @@
 # HG changeset patch
 # User Alex Chronopoulos <achronop@gmail.com>
-# Parent  00c051cd38c7a6cb3178fd0890d52056f83abfdc
-Bug 1345049 - Uplift part of cubeb upstream f07ee6d to esr52. r=padenot. a=xxxxxx
+# Parent  e7ec5225149925c16217cc16f2093cb6ae6f9889
 
 diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_audiounit.cpp
 --- a/media/libcubeb/src/cubeb_audiounit.cpp
 +++ b/media/libcubeb/src/cubeb_audiounit.cpp
-@@ -590,33 +590,43 @@ audiounit_get_input_device_id(AudioDevic
+@@ -548,33 +548,43 @@ audiounit_get_input_device_id(AudioDevic
                                   device_id);
    if (r != noErr) {
      return CUBEB_ERROR;
@@ -50,14 +49,14 @@ diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_a
      if (is_started) {
        audiounit_stream_start_internal(stm);
      }
-@@ -1007,20 +1017,22 @@ audiounit_get_preferred_sample_rate(cube
- static OSStatus audiounit_remove_device_listener(cubeb * context);
- 
- static void
+@@ -981,20 +991,22 @@ static void
  audiounit_destroy(cubeb * ctx)
  {
    // Disabling this assert for bug 1083664 -- we seem to leak a stream
    // assert(ctx->active_streams == 0);
+   if (ctx->active_streams > 0) {
+     LOG("(%p) API misuse, %d streams active when context destroyed!", ctx, ctx->active_streams.load());
+   }
  
 -  /* Unregister the callback if necessary. */
 -  if(ctx->collection_changed_callback) {
@@ -70,14 +69,14 @@ diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_a
 +    }
    }
  
-   ctx->~cubeb();
-   free(ctx);
+   delete ctx;
  }
  
  static void audiounit_stream_destroy(cubeb_stream * stm);
  
-@@ -1861,17 +1873,17 @@ audiounit_close_stream(cubeb_stream *stm
-   cubeb_resampler_destroy(stm->resampler);
+ static int
+@@ -1804,17 +1816,17 @@ audiounit_close_stream(cubeb_stream *stm
+   stm->resampler.reset();
  }
  
  static void
@@ -95,7 +94,7 @@ diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_a
    }
  
  #if !TARGET_OS_IPHONE
-@@ -1905,17 +1917,17 @@ audiounit_stream_start_internal(cubeb_st
+@@ -1846,17 +1858,17 @@ audiounit_stream_start_internal(cubeb_st
  }
  
  static int
@@ -114,7 +113,7 @@ diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_a
    return CUBEB_OK;
  }
  
-@@ -1933,17 +1945,17 @@ audiounit_stream_stop_internal(cubeb_str
+@@ -1874,17 +1886,17 @@ audiounit_stream_stop_internal(cubeb_str
    }
  }
  
@@ -133,7 +132,7 @@ diff --git a/media/libcubeb/src/cubeb_audiounit.cpp b/media/libcubeb/src/cubeb_a
    return CUBEB_OK;
  }
  
-@@ -2030,16 +2042,31 @@ audiounit_stream_get_latency(cubeb_strea
+@@ -1971,16 +1983,31 @@ audiounit_stream_get_latency(cubeb_strea
    }
  
    *latency = stm->hw_latency_frames + stm->current_latency_frames;

@@ -54,10 +54,6 @@ int audiotrack_init(cubeb ** context, char const * context_name);
 #if defined(USE_KAI)
 int kai_init(cubeb ** context, char const * context_name);
 #endif
-#if defined(USE_SUN)
-int sunaudio_init(cubeb ** context, char const * context_name);
-#endif
-
 
 static int
 validate_stream_params(cubeb_stream_params * input_stream_params,
@@ -98,8 +94,6 @@ validate_stream_params(cubeb_stream_params * input_stream_params,
 
   return CUBEB_ERROR_INVALID_FORMAT;
 }
-
-
 
 static int
 validate_latency(int latency)
@@ -143,9 +137,6 @@ cubeb_init(cubeb ** context, char const * context_name)
 #endif
 #if defined(USE_KAI)
     kai_init,
-#endif
-#if defined(USE_SUN)
-    sunaudio_init,
 #endif
   };
   int i;
@@ -222,6 +213,20 @@ cubeb_get_preferred_sample_rate(cubeb * context, uint32_t * rate)
   }
 
   return context->ops->get_preferred_sample_rate(context, rate);
+}
+
+int
+cubeb_get_preferred_channel_layout(cubeb * context, cubeb_channel_layout * layout)
+{
+  if (!context || !layout) {
+    return CUBEB_ERROR_INVALID_PARAMETER;
+  }
+
+  if (!context->ops->get_preferred_channel_layout) {
+    return CUBEB_ERROR_NOT_SUPPORTED;
+  }
+
+  return context->ops->get_preferred_channel_layout(context, layout);
 }
 
 void
@@ -520,10 +525,10 @@ int cubeb_device_info_destroy(cubeb_device_info * info)
     return CUBEB_ERROR_INVALID_PARAMETER;
   }
 
-  free(info->device_id);
-  free(info->friendly_name);
-  free(info->group_id);
-  free(info->vendor_name);
+  free((void *) info->device_id);
+  free((void *) info->friendly_name);
+  free((void *) info->group_id);
+  free((void *) info->vendor_name);
 
   free(info);
   return CUBEB_OK;
@@ -571,4 +576,3 @@ cubeb_crash()
   *((volatile int *) NULL) = 0;
   abort();
 }
-

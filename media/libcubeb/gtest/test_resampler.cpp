@@ -7,12 +7,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif // NOMINMAX
-
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
+#include "gtest/gtest.h"
+#include "common.h"
 #include "cubeb_resampler_internal.h"
-#include <assert.h>
 #include <stdio.h>
 #include <algorithm>
 #include <iostream>
@@ -154,7 +151,7 @@ void test_delay_lines(uint32_t delay_frames, uint32_t channels, uint32_t chunk_m
 
   // Check the diracs have been shifted by `delay_frames` frames.
   for (uint32_t i = 0; i < output.length() - delay_frames * channels + 1; i+=100) {
-    assert(output.data()[i + channel + delay_frames * channels] == 0.5);
+    ASSERT_EQ(output.data()[i + channel + delay_frames * channels], 0.5);
     channel = (channel + 1) % channels;
   }
 
@@ -232,7 +229,7 @@ void test_resampler_one_way(uint32_t channels, uint32_t source_rate, uint32_t ta
       fuzzy_equal = false;
     }
   }
-  assert(fuzzy_equal);
+  ASSERT_TRUE(fuzzy_equal);
 }
 
 template<typename T>
@@ -283,13 +280,12 @@ uint32_t fill_with_sine(float * buf, uint32_t rate, uint32_t channels,
   return initial_phase;
 }
 
-long data_cb(cubeb_stream * /*stm*/, void * user_ptr,
+long data_cb_resampler(cubeb_stream * /*stm*/, void * user_ptr,
              const void * input_buffer, void * output_buffer, long frame_count)
 {
   osc_state * state = reinterpret_cast<osc_state*>(user_ptr);
   const float * in = reinterpret_cast<const float*>(input_buffer);
   float * out = reinterpret_cast<float*>(output_buffer);
-
 
   state->input.push(in, frame_count * state->input_channels);
 
@@ -341,7 +337,7 @@ void test_resampler_duplex(uint32_t input_channels, uint32_t output_channels,
 
   cubeb_resampler * resampler =
     cubeb_resampler_create((cubeb_stream*)nullptr, &input_params, &output_params, target_rate,
-                           data_cb, (void*)&state, CUBEB_RESAMPLER_QUALITY_VOIP);
+                           data_cb_resampler, (void*)&state, CUBEB_RESAMPLER_QUALITY_VOIP);
 
   long latency = cubeb_resampler_latency(resampler);
 
@@ -365,7 +361,6 @@ void test_resampler_duplex(uint32_t input_channels, uint32_t output_channels,
   /* expected output is a 440Hz sine wave at 32kHz */
   fill_with_sine(expected_resampled_output.data() + latency,
                  output_rate, output_channels, output_rate * duration_s - latency, 0);
-
 
   while (state.output_phase_index != state.max_output_phase_index) {
     uint32_t leftover_samples = input_buffer.length() * input_channels;
@@ -397,15 +392,18 @@ void test_resampler_duplex(uint32_t input_channels, uint32_t output_channels,
   dump("input.raw", state.input.data(), state.input.length());
   dump("output.raw", state.output.data(), state.output.length());
 
-  assert(array_fuzzy_equal(state.input, expected_resampled_input, epsilon<T>(input_rate/target_rate)));
-  assert(array_fuzzy_equal(state.output, expected_resampled_output, epsilon<T>(output_rate/target_rate)));
+ // This is disabled because the latency estimation in the resampler code is
+ // slightly off so we can generate expected vectors.
+ // See https://github.com/kinetiknz/cubeb/issues/93
+ // ASSERT_TRUE(array_fuzzy_equal(state.input, expected_resampled_input, epsilon<T>(input_rate/target_rate)));
+ // ASSERT_TRUE(array_fuzzy_equal(state.output, expected_resampled_output, epsilon<T>(output_rate/target_rate)));
 
   cubeb_resampler_destroy(resampler);
 }
 
 #define array_size(x) (sizeof(x) / sizeof(x[0]))
 
-void test_resamplers_one_way()
+TEST(cubeb, resampler_one_way)
 {
   /* Test one way resamplers */
   for (uint32_t channels = 1; channels <= max_channels; channels++) {
@@ -422,9 +420,8 @@ void test_resamplers_one_way()
   }
 }
 
-void test_resamplers_duplex()
+TEST(cubeb, DISABLED_resampler_duplex)
 {
-  /* Test duplex resamplers */
   for (uint32_t input_channels = 1; input_channels <= max_channels; input_channels++) {
     for (uint32_t output_channels = 1; output_channels <= max_channels; output_channels++) {
       for (uint32_t source_rate_input = 0; source_rate_input < array_size(sample_rates); source_rate_input++) {
@@ -451,7 +448,7 @@ void test_resamplers_duplex()
   }
 }
 
-void test_delay_line()
+TEST(cubeb, resampler_delay_line)
 {
   for (uint32_t channel = 1; channel <= 2; channel++) {
     for (uint32_t delay_frames = 4; delay_frames <= 40; delay_frames+=chunk_increment) {
@@ -468,12 +465,12 @@ long test_output_only_noop_data_cb(cubeb_stream * /*stm*/, void * /*user_ptr*/,
                                    const void * input_buffer,
                                    void * output_buffer, long frame_count)
 {
-  assert(output_buffer);
-  assert(!input_buffer);
+  EXPECT_TRUE(output_buffer);
+  EXPECT_TRUE(!input_buffer);
   return frame_count;
 }
 
-void test_output_only_noop()
+TEST(cubeb, resampler_output_only_noop)
 {
   cubeb_stream_params output_params;
   int target_rate;
@@ -495,7 +492,7 @@ void test_output_only_noop()
   got = cubeb_resampler_fill(resampler, nullptr, nullptr,
                              out_buffer, out_frames);
 
-  assert(got == out_frames);
+  ASSERT_EQ(got, out_frames);
 
   cubeb_resampler_destroy(resampler);
 }
@@ -504,12 +501,12 @@ long test_drain_data_cb(cubeb_stream * /*stm*/, void * /*user_ptr*/,
                         const void * input_buffer,
                         void * output_buffer, long frame_count)
 {
-  assert(output_buffer);
-  assert(!input_buffer);
+  EXPECT_TRUE(output_buffer);
+  EXPECT_TRUE(!input_buffer);
   return frame_count - 10;
 }
 
-void test_resampler_drain()
+TEST(cubeb, resampler_drain)
 {
   cubeb_stream_params output_params;
   int target_rate;
@@ -535,20 +532,220 @@ void test_resampler_drain()
 
   /* If the above is not an infinite loop, the drain was a success, just mark
    * this test as such. */
-  assert(true);
+  ASSERT_TRUE(true);
 
   cubeb_resampler_destroy(resampler);
 }
 
-int main()
+// gtest does not support using ASSERT_EQ and friend in a function that returns
+// a value.
+void check_output(const void * input_buffer, void * output_buffer, long frame_count)
 {
-  test_resamplers_one_way();
-  test_delay_line();
-  // This is disabled because the latency estimation in the resampler code is
-  // slightly off so we can generate expected vectors.
-  // test_resamplers_duplex();
-  test_output_only_noop();
-  test_resampler_drain();
+  ASSERT_EQ(input_buffer, nullptr);
+  ASSERT_EQ(frame_count, 256);
+  ASSERT_TRUE(!!output_buffer);
+}
 
-  return 0;
+long cb_passthrough_resampler_output(cubeb_stream * /*stm*/, void * /*user_ptr*/,
+                                     const void * input_buffer,
+                                     void * output_buffer, long frame_count)
+{
+  check_output(input_buffer, output_buffer, frame_count);
+  return frame_count;
+}
+
+TEST(cubeb, resampler_passthrough_output_only)
+{
+  // Test that the passthrough resampler works when there is only an output stream.
+  cubeb_stream_params output_params;
+
+  const size_t output_channels = 2;
+  output_params.channels = output_channels;
+  output_params.rate = 44100;
+  output_params.format = CUBEB_SAMPLE_FLOAT32NE;
+  int target_rate = output_params.rate;
+
+  cubeb_resampler * resampler =
+    cubeb_resampler_create((cubeb_stream*)nullptr, nullptr, &output_params,
+                           target_rate, cb_passthrough_resampler_output, nullptr,
+                           CUBEB_RESAMPLER_QUALITY_VOIP);
+
+  float output_buffer[output_channels * 256];
+
+  long got;
+  for (uint32_t i = 0; i < 30; i++) {
+    got = cubeb_resampler_fill(resampler, nullptr, nullptr, output_buffer, 256);
+    ASSERT_EQ(got, 256);
+  }
+}
+
+// gtest does not support using ASSERT_EQ and friend in a function that returns
+// a value.
+void check_input(const void * input_buffer, void * output_buffer, long frame_count)
+{
+  ASSERT_EQ(output_buffer, nullptr);
+  ASSERT_EQ(frame_count, 256);
+  ASSERT_TRUE(!!input_buffer);
+}
+
+long cb_passthrough_resampler_input(cubeb_stream * /*stm*/, void * /*user_ptr*/,
+                                    const void * input_buffer,
+                                    void * output_buffer, long frame_count)
+{
+  check_input(input_buffer, output_buffer, frame_count);
+  return frame_count;
+}
+
+TEST(cubeb, resampler_passthrough_input_only)
+{
+  // Test that the passthrough resampler works when there is only an output stream.
+  cubeb_stream_params input_params;
+
+  const size_t input_channels = 2;
+  input_params.channels = input_channels;
+  input_params.rate = 44100;
+  input_params.format = CUBEB_SAMPLE_FLOAT32NE;
+  int target_rate = input_params.rate;
+
+  cubeb_resampler * resampler =
+    cubeb_resampler_create((cubeb_stream*)nullptr, &input_params, nullptr,
+                           target_rate, cb_passthrough_resampler_input, nullptr,
+                           CUBEB_RESAMPLER_QUALITY_VOIP);
+
+  float input_buffer[input_channels * 256];
+
+  long got;
+  for (uint32_t i = 0; i < 30; i++) {
+    long int frames = 256;
+    got = cubeb_resampler_fill(resampler, input_buffer, &frames, nullptr, 0);
+    ASSERT_EQ(got, 256);
+  }
+}
+
+template<typename T>
+long seq(T* array, int stride, long start, long count)
+{
+  for(int i = 0; i < count; i++) {
+    for (int j = 0; j < stride; j++) {
+      array[i + j] = static_cast<T>(start + i);
+    }
+  }
+  return start + count;
+}
+
+template<typename T>
+void is_seq(T * array, int stride, long count, long expected_start)
+{
+  uint32_t output_index = 0;
+  for (long i = 0; i < count; i++) {
+    for (int j = 0; j < stride; j++) {
+      ASSERT_EQ(array[output_index + j], expected_start + i);
+    }
+    output_index += stride;
+  }
+}
+
+// gtest does not support using ASSERT_EQ and friend in a function that returns
+// a value.
+template<typename T>
+void check_duplex(const T * input_buffer,
+                  T * output_buffer, long frame_count)
+{
+  ASSERT_EQ(frame_count, 256);
+  // Silence scan-build warning.
+  ASSERT_TRUE(!!output_buffer); assert(output_buffer);
+  ASSERT_TRUE(!!input_buffer); assert(input_buffer);
+
+  int output_index = 0;
+  for (int i = 0; i < frame_count; i++) {
+    // output is two channels, input is one channel, we upmix.
+    output_buffer[output_index] = output_buffer[output_index+1] = input_buffer[i];
+    output_index += 2;
+  }
+}
+
+long cb_passthrough_resampler_duplex(cubeb_stream * /*stm*/, void * /*user_ptr*/,
+                                     const void * input_buffer,
+                                     void * output_buffer, long frame_count)
+{
+  check_duplex<float>(static_cast<const float*>(input_buffer), static_cast<float*>(output_buffer), frame_count);
+  return frame_count;
+}
+
+
+TEST(cubeb, resampler_passthrough_duplex_callback_reordering)
+{
+  // Test that when pre-buffering on resampler creation, we can survive an input
+  // callback being delayed.
+
+  cubeb_stream_params input_params;
+  cubeb_stream_params output_params;
+
+  const int input_channels = 1;
+  const int output_channels = 2;
+
+  input_params.channels = input_channels;
+  input_params.rate = 44100;
+  input_params.format = CUBEB_SAMPLE_FLOAT32NE;
+
+  output_params.channels = output_channels;
+  output_params.rate = input_params.rate;
+  output_params.format = CUBEB_SAMPLE_FLOAT32NE;
+
+  int target_rate = input_params.rate;
+
+  cubeb_resampler * resampler =
+    cubeb_resampler_create((cubeb_stream*)nullptr, &input_params, &output_params,
+                           target_rate, cb_passthrough_resampler_duplex, nullptr,
+                           CUBEB_RESAMPLER_QUALITY_VOIP);
+
+  const long BUF_BASE_SIZE = 256;
+  float input_buffer_prebuffer[input_channels * BUF_BASE_SIZE * 2];
+  float input_buffer_glitch[input_channels * BUF_BASE_SIZE * 2];
+  float input_buffer_normal[input_channels * BUF_BASE_SIZE];
+  float output_buffer[output_channels * BUF_BASE_SIZE];
+
+  long seq_idx = 0;
+  long output_seq_idx = 0;
+
+  long prebuffer_frames = ARRAY_LENGTH(input_buffer_prebuffer) / input_params.channels;
+  seq_idx = seq(input_buffer_prebuffer, input_channels, seq_idx,
+                prebuffer_frames);
+
+  long got = cubeb_resampler_fill(resampler, input_buffer_prebuffer, &prebuffer_frames,
+                                  output_buffer, BUF_BASE_SIZE);
+
+  output_seq_idx += BUF_BASE_SIZE;
+
+  // prebuffer_frames will hold the frames used by the resampler.
+  ASSERT_EQ(prebuffer_frames, BUF_BASE_SIZE);
+  ASSERT_EQ(got, BUF_BASE_SIZE);
+
+  for (uint32_t i = 0; i < 300; i++) {
+    long int frames = BUF_BASE_SIZE;
+    // Simulate that sometimes, we don't have the input callback on time
+    if (i != 0 && (i % 100) == 0) {
+      long zero = 0;
+      got = cubeb_resampler_fill(resampler, input_buffer_normal /* unused here */,
+                                 &zero, output_buffer, BUF_BASE_SIZE);
+      is_seq(output_buffer, 2, BUF_BASE_SIZE, output_seq_idx);
+      output_seq_idx += BUF_BASE_SIZE;
+    } else if (i != 0 && (i % 100) == 1) {
+      // if this is the case, the on the next iteration, we'll have twice the
+      // amount of input frames
+      seq_idx = seq(input_buffer_glitch, input_channels, seq_idx, BUF_BASE_SIZE * 2);
+      frames = 2 * BUF_BASE_SIZE;
+      got = cubeb_resampler_fill(resampler, input_buffer_glitch, &frames, output_buffer, BUF_BASE_SIZE);
+      is_seq(output_buffer, 2, BUF_BASE_SIZE, output_seq_idx);
+      output_seq_idx += BUF_BASE_SIZE;
+    } else {
+       // normal case
+      seq_idx = seq(input_buffer_normal, input_channels, seq_idx, BUF_BASE_SIZE);
+      long normal_input_frame_count = 256;
+      got = cubeb_resampler_fill(resampler, input_buffer_normal, &normal_input_frame_count, output_buffer, BUF_BASE_SIZE);
+      is_seq(output_buffer, 2, BUF_BASE_SIZE, output_seq_idx);
+      output_seq_idx += BUF_BASE_SIZE;
+    }
+    ASSERT_EQ(got, BUF_BASE_SIZE);
+  }
 }

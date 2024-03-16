@@ -21,11 +21,16 @@
 extern mozilla::LazyLogModule gMediaStreamGraphLog;
 #define STREAM_LOG(type, msg) MOZ_LOG(gMediaStreamGraphLog, type, msg)
 
-// XXX: We didn't use NSPR log here because we wanted this interleaved with
-// adb logcat on Android/B2G. This is no longer a concern; use NSPR?
+// We don't use NSPR log here because we want this interleaved with adb logcat
+// on Android/B2G
 // #define ENABLE_LIFECYCLE_LOG
 #ifdef ENABLE_LIFECYCLE_LOG
+#ifdef ANDROID
+#include "android/log.h"
+#define LIFECYCLE_LOG(...)  __android_log_print(ANDROID_LOG_INFO, "Gecko - MSG" , __VA_ARGS__);
+#else
 #define LIFECYCLE_LOG(...) printf(__VA_ARGS__);printf("\n");
+#endif
 #else
 #define LIFECYCLE_LOG(...)
 #endif
@@ -33,14 +38,6 @@ extern mozilla::LazyLogModule gMediaStreamGraphLog;
 namespace mozilla {
 
 StaticRefPtr<nsIThreadPool> AsyncCubebTask::sThreadPool;
-
-struct AutoProfilerUnregisterThread
-{
-  ~AutoProfilerUnregisterThread()
-  {
-    profiler_unregister_thread();
-  }
-};
 
 GraphDriver::GraphDriver(MediaStreamGraphImpl* aGraphImpl)
   : mIterationStart(0),
@@ -186,9 +183,7 @@ public:
   }
   NS_IMETHOD Run() override
   {
-    char aLocal;
     STREAM_LOG(LogLevel::Debug, ("Starting system thread"));
-    profiler_register_thread("MediaStreamGraph", &aLocal);
     LIFECYCLE_LOG("Starting a new system driver for graph %p\n",
                   mDriver->mGraphImpl.get());
 
@@ -199,7 +194,7 @@ public:
     }
     if (previousDriver) {
       LIFECYCLE_LOG("%p releasing an AudioCallbackDriver(%p), for graph %p\n",
-                    mDriver,
+                    mDriver.get(),
                     previousDriver,
                     mDriver->GraphImpl());
       MOZ_ASSERT(!mDriver->AsAudioCallbackDriver());
@@ -306,8 +301,6 @@ SystemClockDriver::IsFallback()
 void
 ThreadedDriver::RunThread()
 {
-  AutoProfilerUnregisterThread autoUnregister;
-
   while (true) {
     mIterationStart = IterationEnd();
     mIterationEnd += GetIntervalForIteration();
@@ -527,7 +520,9 @@ AsyncCubebTask::Run()
   switch(mOperation) {
     case AsyncCubebOperation::INIT: {
       LIFECYCLE_LOG("AsyncCubebOperation::INIT driver=%p\n", mDriver.get());
-      mDriver->Init();
+      if (!mDriver->Init()) {
+        return NS_ERROR_FAILURE;
+      }
       mDriver->CompleteAudioContextOperations(mOperation);
       break;
     }
@@ -607,25 +602,38 @@ bool IsMacbookOrMacbookAir()
   return false;
 }
 
-void
+bool
 AudioCallbackDriver::Init()
 {
   cubeb* cubebContext = CubebUtils::GetCubebContext();
   if (!cubebContext) {
     NS_WARNING("Could not get cubeb context.");
-    return;
+    if (!mFromFallback) {
+      CubebUtils::ReportCubebStreamInitFailure(true);
+    }
+    return false;
   }
 
   cubeb_stream_params output;
   cubeb_stream_params input;
   uint32_t latency_frames;
+  bool firstStream = CubebUtils::GetFirstStream();
 
   MOZ_ASSERT(!NS_IsMainThread(),
       "This is blocking and should never run on the main thread.");
 
   mSampleRate = output.rate = CubebUtils::PreferredSampleRate();
 
+#if defined(__ANDROID__)
+  output.stream_type = CUBEB_STREAM_TYPE_MUSIC;
+
+  if (output.stream_type == CUBEB_STREAM_TYPE_MAX) {
+    NS_WARNING("Bad stream type");
+    return false;
+  }
+#else
   (void)mAudioChannel;
+#endif
 
   output.channels = mGraphImpl->AudioChannelCount();
   if (AUDIO_OUTPUT_FORMAT == AUDIO_FORMAT_S16) {
@@ -633,6 +641,9 @@ AudioCallbackDriver::Init()
   } else {
     output.format = CUBEB_SAMPLE_FLOAT32NE;
   }
+
+  // Graphs are always stereo for now.
+  output.layout = CUBEB_LAYOUT_STEREO;
 
   Maybe<uint32_t> latencyPref = CubebUtils::GetCubebMSGLatencyInFrames();
   if (latencyPref) {
@@ -652,6 +663,7 @@ AudioCallbackDriver::Init()
 
   input = output;
   input.channels = mInputChannels; // change to support optional stereo capture
+  input.layout = CUBEB_LAYOUT_MONO;
 
   cubeb_stream* stream = nullptr;
   CubebUtils::AudioDeviceID input_id = nullptr, output_id = nullptr;
@@ -688,24 +700,27 @@ AudioCallbackDriver::Init()
       NS_WARNING_ASSERTION(
         rv == CUBEB_OK,
         "Could not set the audio stream volume in GraphDriver.cpp");
+      CubebUtils::ReportCubebBackendUsed();
     } else {
 #ifdef MOZ_WEBRTC
       StaticMutexAutoUnlock unlock(AudioInputCubeb::Mutex());
 #endif
       NS_WARNING("Could not create a cubeb stream for MediaStreamGraph, falling back to a SystemClockDriver");
-      // Fall back to a driver using a normal thread. If needed,
-      // the graph will try to re-open an audio stream later.
+      // Only report failures when we're not coming from a driver that was
+      // created itself as a fallback driver because of a previous audio driver
+      // failure.
+      if (!mFromFallback) {
+        CubebUtils::ReportCubebStreamInitFailure(firstStream);
+      }
+      // Fall back to a driver using a normal thread.
       MonitorAutoLock lock(GraphImpl()->GetMonitor());
       SystemClockDriver* nextDriver = new SystemClockDriver(GraphImpl());
       SetNextDriver(nextDriver);
       nextDriver->MarkAsFallback();
       nextDriver->SetGraphTime(this, mIterationStart, mIterationEnd);
-      // We're not using SwitchAtNextIteration here, because there
-      // won't be a next iteration if we don't restart things manually:
-      // the audio stream just signaled that it's in error state.
       mGraphImpl->SetCurrentDriver(nextDriver);
       nextDriver->Start();
-      return;
+      return true;
     }
   }
   bool aec;
@@ -715,9 +730,13 @@ AudioCallbackDriver::Init()
   cubeb_stream_register_device_changed_callback(mAudioStream,
                                                 AudioCallbackDriver::DeviceChangedCallback_s);
 
-  StartStream();
+  if (!StartStream()) {
+    STREAM_LOG(LogLevel::Warning, ("AudioCallbackDriver couldn't start stream."));
+    return false;
+  }
 
   STREAM_LOG(LogLevel::Debug, ("AudioCallbackDriver started."));
+  return true;
 }
 
 
@@ -764,12 +783,13 @@ AudioCallbackDriver::Start()
   initEvent->Dispatch();
 }
 
-void
+bool
 AudioCallbackDriver::StartStream()
 {
   mShouldFallbackIfError = true;
   if (cubeb_stream_start(mAudioStream) != CUBEB_OK) {
-    MOZ_CRASH("Could not start cubeb stream for MSG.");
+    NS_WARNING("Could not start cubeb stream for MSG.");
+    return false;
   }
 
   {
@@ -777,6 +797,7 @@ AudioCallbackDriver::StartStream()
     mStarted = true;
     mWaitState = WAITSTATE_RUNNING;
   }
+  return true;
 }
 
 void
@@ -801,9 +822,7 @@ AudioCallbackDriver::Revive()
     mGraphImpl->SetCurrentDriver(NextDriver());
     NextDriver()->Start();
   } else {
-    STREAM_LOG(LogLevel::Debug,
-               ("Starting audio threads for MediaStreamGraph %p from a new thread.",
-                mGraphImpl.get()));
+    STREAM_LOG(LogLevel::Debug, ("Starting audio threads for MediaStreamGraph %p from a new thread.", mGraphImpl.get()));
     RefPtr<AsyncCubebTask> initEvent =
       new AsyncCubebTask(this, AsyncCubebOperation::INIT);
     initEvent->Dispatch();
@@ -1033,9 +1052,6 @@ AudioCallbackDriver::StateCallback(cubeb_state aState)
     RemoveCallback();
     nextDriver->MarkAsFallback();
     nextDriver->SetGraphTime(this, mIterationStart, mIterationEnd);
-    // We're not using SwitchAtNextIteration here, because there
-    // won't be a next iteration if we don't restart things manually:
-    // the audio stream just signaled that it's in error state.
     mGraphImpl->SetCurrentDriver(nextDriver);
     nextDriver->Start();
   }
