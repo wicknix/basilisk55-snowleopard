@@ -34,3 +34,6 @@ pref("devtools.selfxss.count", 0);
 
 // Use no proxy by default in case we are using Squid or similar.
 pref("network.proxy.type", 0);
+
+// Shared User Agent Overrides
+#include ../../shared/uaoverrides.inc
