@@ -1540,3 +1540,6 @@ pref("webchannel.allowObject.urlWhitelist", "");
 
 // Preferences for the form autofill system extension
 pref("browser.formautofill.experimental", false);
+
+// Use dark colors on pages that support it (like google, duckduckgo, youtube, etc)
+pref("browser.display.prefers_color_scheme", 2);
