@@ -123,7 +123,7 @@
             </description>
           </vbox>
           <description class="text-blurb" id="communityDesc">
-              This browser was made possible thanks to the efforts of <label class="text-link" href="https://github.com/roytam1">Roy Tam</label>, <label class="text-link" href="https://github.com/parrotgeek1">ParrotGeek</label>, <label class="text-link" href="http://www.palemoon.org/">the Pale Moon team</label>, and Mozilla developers. Learn <label class="text-link" useoriginprincipal="true" href="about:credits">who contributed</label> to this software.
+              This browser was made possible thanks to the efforts of <label class="text-link" href="https://github.com/roytam1">Roy Tam</label>, <label class="text-link" href="https://github.com/jazzzny">Jazzzny</label>, <label class="text-link" href="https://github.com/wicknix">Wicknix</label>, <label class="text-link" href="https://github.com/parrotgeek1">ParrotGeek</label>, <label class="text-link" href="http://www.palemoon.org/">the Pale Moon team</label>, and Mozilla developers. Learn <label class="text-link" useoriginprincipal="true" href="about:credits">who contributed</label> to this software.
           </description>
           <description class="text-blurb" id="contributeDesc">
           </description>
