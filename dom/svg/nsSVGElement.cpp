@@ -52,12 +52,10 @@
 #include "SVGMotionSMILAttr.h"
 #include "nsAttrValueOrString.h"
 #include "nsSMILAnimationController.h"
+#include "mozilla/css/Declaration.h"
 #include "mozilla/dom/SVGElementBinding.h"
-#include "mozilla/DeclarationBlock.h"
-#include "mozilla/DeclarationBlockInlines.h"
 #include "mozilla/Unused.h"
-#include "mozilla/RestyleManagerHandle.h"
-#include "mozilla/RestyleManagerHandleInlines.h"
+#include "mozilla/RestyleManager.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -919,7 +917,7 @@ nsSVGElement::WalkContentStyleRules(nsRuleWalker* aRuleWalker)
   }
 
   if (mContentDeclarationBlock) {
-    css::Declaration* declaration = mContentDeclarationBlock->AsGecko();
+    css::Declaration* declaration = mContentDeclarationBlock;
     declaration->SetImmutable();
     aRuleWalker->Forward(declaration);
   }
@@ -935,20 +933,17 @@ nsSVGElement::WalkAnimatedContentStyleRules(nsRuleWalker* aRuleWalker)
   // whether this is a "no-animation restyle". (This should match the check
   // in nsHTMLCSSStyleSheet::RulesMatching(), where we determine whether to
   // apply the SMILOverrideStyle.)
-  RestyleManagerHandle restyleManager =
+  RestyleManager* restyleManager =
     aRuleWalker->PresContext()->RestyleManager();
-  MOZ_ASSERT(restyleManager->IsGecko(),
-             "stylo: Servo-backed style system should not be calling "
-             "WalkAnimatedContentStyleRules");
-  if (!restyleManager->AsGecko()->SkipAnimationRules()) {
+  if (!restyleManager->SkipAnimationRules()) {
     // update/walk the animated content style rule.
-    DeclarationBlock* animContentDeclBlock = GetAnimatedContentDeclarationBlock();
+    css::Declaration* animContentDeclBlock = GetAnimatedContentDeclarationBlock();
     if (!animContentDeclBlock) {
       UpdateAnimatedContentDeclarationBlock();
       animContentDeclBlock = GetAnimatedContentDeclarationBlock();
     }
     if (animContentDeclBlock) {
-      css::Declaration* declaration = animContentDeclBlock->AsGecko();
+      css::Declaration* declaration = animContentDeclBlock;
       declaration->SetImmutable();
       aRuleWalker->Forward(declaration);
     }
@@ -1374,7 +1369,7 @@ ReleaseDeclBlock(void*    aObject,       /* unused */
 {
   MOZ_ASSERT(aPropertyName == SMIL_MAPPED_ATTR_STYLEDECL_ATOM,
              "unexpected property name, for animated content style rule");
-  auto decl = static_cast<DeclarationBlock*>(aPropertyValue);
+  auto decl = static_cast<css::Declaration*>(aPropertyValue);
   MOZ_ASSERT(decl, "unexpected null decl");
   decl->Release();
 }
@@ -1396,7 +1391,7 @@ nsSVGElement::UpdateAnimatedContentDeclarationBlock()
   doc->PropertyTable(SMIL_MAPPED_ATTR_ANIMVAL)->
     Enumerate(this, ParseMappedAttrAnimValueCallback, &mappedAttrParser);
  
-  RefPtr<DeclarationBlock> animContentDeclBlock =
+  RefPtr<css::Declaration> animContentDeclBlock =
     mappedAttrParser.GetDeclarationBlock();
 
   if (animContentDeclBlock) {
@@ -1412,11 +1407,11 @@ nsSVGElement::UpdateAnimatedContentDeclarationBlock()
   }
 }
 
-DeclarationBlock*
+css::Declaration*
 nsSVGElement::GetAnimatedContentDeclarationBlock()
 {
   return
-    static_cast<DeclarationBlock*>(GetProperty(SMIL_MAPPED_ATTR_ANIMVAL,
+    static_cast<css::Declaration*>(GetProperty(SMIL_MAPPED_ATTR_ANIMVAL,
                                                SMIL_MAPPED_ATTR_STYLEDECL_ATOM,
                                                nullptr));
 }

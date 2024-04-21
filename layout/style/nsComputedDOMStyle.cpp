@@ -10,6 +10,7 @@
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/Preferences.h"
+#include "mozilla/RestyleManager.h"
 
 #include "nsError.h"
 #include "nsDOMString.h"
@@ -36,8 +37,7 @@
 #include "nsIDocument.h"
 
 #include "nsCSSPseudoElements.h"
-#include "mozilla/StyleSetHandle.h"
-#include "mozilla/StyleSetHandleInlines.h"
+#include "nsStyleSet.h"
 #include "imgIRequest.h"
 #include "nsLayoutUtils.h"
 #include "nsCSSKeywords.h"
@@ -465,18 +465,14 @@ public:
 
     // Set SkipAnimationRules flag if we are going to resolve style without
     // animation.
-    if (aPresContext->RestyleManager()->IsGecko()) {
-      mRestyleManager = aPresContext->RestyleManager()->AsGecko();
+    mRestyleManager = aPresContext->RestyleManager();
 
-      mOldSkipAnimationRules = mRestyleManager->SkipAnimationRules();
-      mRestyleManager->SetSkipAnimationRules(true);
-    } else {
-      NS_WARNING("stylo: can't skip animaition rules yet");
-    }
+    mOldSkipAnimationRules = mRestyleManager->SkipAnimationRules();
+    mRestyleManager->SetSkipAnimationRules(true);
   }
 
   already_AddRefed<nsStyleContext>
-  ResolveWithAnimation(StyleSetHandle aStyleSet,
+  ResolveWithAnimation(nsStyleSet* aStyleSet,
                        Element* aElement,
                        CSSPseudoElementType aType,
                        nsStyleContext* aParentContext,
@@ -496,8 +492,7 @@ public:
                                                     aParentContext,
                                                     pseudoElement);
     } else {
-      result = aStyleSet->ResolveStyleFor(aElement, aParentContext,
-                                          LazyComputeBehavior::Allow);
+      result = aStyleSet->ResolveStyleFor(aElement, aParentContext);
     }
     if (aStyleType == nsComputedDOMStyle::StyleType::eDefaultOnly) {
       // We really only want the user and UA rules.  Filter out the other ones.
@@ -520,21 +515,19 @@ public:
         rules[i].swap(rules[length - i - 1]);
       }
 
-      result = aStyleSet->AsGecko()->ResolveStyleForRules(aParentContext,
+      result = aStyleSet->ResolveStyleForRules(aParentContext,
                                                           rules);
     }
     return result.forget();
   }
 
   already_AddRefed<nsStyleContext>
-  ResolveWithoutAnimation(StyleSetHandle aStyleSet,
+  ResolveWithoutAnimation(nsStyleSet* aStyleSet,
                           Element* aElement,
                           CSSPseudoElementType aType,
                           nsStyleContext* aParentContext,
                           bool aInDocWithShell)
   {
-    MOZ_ASSERT(!aStyleSet->IsServo(),
-      "Bug 1311257: Servo backend does not support the base value yet");
     MOZ_ASSERT(mAnimationFlag == nsComputedDOMStyle::eWithoutAnimation,
       "AnimationFlag should be eWithoutAnimation");
 
@@ -545,13 +538,13 @@ public:
       Element* pseudoElement =
         frame && aInDocWithShell ? frame->GetPseudoElement(aType) : nullptr;
       result =
-        aStyleSet->AsGecko()->ResolvePseudoElementStyleWithoutAnimation(
+        aStyleSet->ResolvePseudoElementStyleWithoutAnimation(
           aElement, aType,
           aParentContext,
           pseudoElement);
     } else {
       result =
-        aStyleSet->AsGecko()->ResolveStyleWithoutAnimation(aElement,
+        aStyleSet->ResolveStyleWithoutAnimation(aElement,
                                                            aParentContext);
     }
     return result.forget();
@@ -620,7 +613,7 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
   if (!presContext)
     return nullptr;
 
-  StyleSetHandle styleSet = presShell->StyleSet();
+  nsStyleSet* styleSet = presShell->StyleSet();
 
   auto type = CSSPseudoElementType::NotPseudo;
   if (aPseudo) {
@@ -629,16 +622,6 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
     if (type >= CSSPseudoElementType::Count) {
       return nullptr;
     }
-  }
-
-  // For Servo, compute the result directly without recursively building up
-  // a throwaway style context chain.
-  if (ServoStyleSet* servoSet = styleSet->GetAsServo()) {
-    if (aStyleType == eDefaultOnly) {
-      NS_ERROR("stylo: ServoStyleSets cannot supply UA-only styles yet");
-      return nullptr;
-    }
-    return servoSet->ResolveTransientStyle(aElement, type);
   }
 
   RefPtr<nsStyleContext> parentContext;
@@ -738,7 +721,7 @@ nsComputedDOMStyle::GetPresShellForContent(nsIContent* aContent)
 // nsDOMCSSDeclaration abstract methods which should never be called
 // on a nsComputedDOMStyle object, but must be defined to avoid
 // compile errors.
-DeclarationBlock*
+mozilla::css::Declaration*
 nsComputedDOMStyle::GetCSSDeclaration(Operation)
 {
   NS_RUNTIMEABORT("called nsComputedDOMStyle::GetCSSDeclaration");
@@ -746,7 +729,7 @@ nsComputedDOMStyle::GetCSSDeclaration(Operation)
 }
 
 nsresult
-nsComputedDOMStyle::SetCSSDeclaration(DeclarationBlock*)
+nsComputedDOMStyle::SetCSSDeclaration(mozilla::css::Declaration*)
 {
   NS_RUNTIMEABORT("called nsComputedDOMStyle::SetCSSDeclaration");
   return NS_ERROR_FAILURE;
@@ -808,10 +791,7 @@ MustReresolveStyle(const nsStyleContext* aContext)
   MOZ_ASSERT(aContext);
 
   if (aContext->HasPseudoElementData()) {
-    if (!aContext->GetPseudo() ||
-        aContext->StyleSource().IsServoComputedValues()) {
-      // TODO(emilio): When ::first-line is supported in Servo, we may want to
-      // fix this to avoid re-resolving pseudo-element styles.
+    if (!aContext->GetPseudo()) {
       return true;
     }
 

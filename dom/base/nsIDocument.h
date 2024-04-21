@@ -36,7 +36,6 @@
 #include "mozilla/dom/DocumentOrShadowRoot.h"
 #include "mozilla/dom/Dispatcher.h"
 #include "mozilla/LinkedList.h"
-#include "mozilla/StyleBackendType.h"
 #include "mozilla/StyleSheet.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/UniquePtr.h"
@@ -100,6 +99,7 @@ class nsWindowSizes;
 class nsDOMCaretPosition;
 class nsViewportInfo;
 class nsIGlobalObject;
+class nsStyleSet;
 struct nsCSSSelectorList;
 
 namespace mozilla {
@@ -108,7 +108,6 @@ class CSSStyleSheet;
 class ErrorResult;
 class EventStates;
 class PendingAnimationTracker;
-class StyleSetHandle;
 class SVGAttrAnimationRuleProcessor;
 template<typename> class OwningNonNull;
 
@@ -832,7 +831,7 @@ public:
   virtual already_AddRefed<nsIPresShell> CreateShell(
       nsPresContext* aContext,
       nsViewManager* aViewManager,
-      mozilla::StyleSetHandle aStyleSet) = 0;
+      nsStyleSet* aStyleSet) = 0;
   virtual void DeleteShell() = 0;
 
   nsIPresShell* GetShell() const
@@ -1196,20 +1195,6 @@ public:
    */
   mozilla::css::Loader* CSSLoader() const {
     return mCSSLoader;
-  }
-
-  mozilla::StyleBackendType GetStyleBackendType() const {
-    if (mStyleBackendType == mozilla::StyleBackendType(0)) {
-      const_cast<nsIDocument*>(this)->UpdateStyleBackendType();
-    }
-    MOZ_ASSERT(mStyleBackendType != mozilla::StyleBackendType(0));
-    return mStyleBackendType;
-  }
-
-  void UpdateStyleBackendType();
-
-  bool IsStyledByServo() const {
-    return GetStyleBackendType() == mozilla::StyleBackendType::Servo;
   }
 
   /**
@@ -3255,10 +3240,6 @@ protected:
 
   // Our readyState
   ReadyState mReadyState;
-
-  // Whether this document has (or will have, once we have a pres shell) a
-  // Gecko- or Servo-backed style system.
-  mozilla::StyleBackendType mStyleBackendType;
 
 #ifdef MOZILLA_INTERNAL_API
   // Our visibility state

@@ -248,8 +248,6 @@
 #include "mozilla/dom/BoxObject.h"
 #include "gfxPrefs.h"
 #include "nsISupportsPrimitives.h"
-#include "mozilla/StyleSetHandle.h"
-#include "mozilla/StyleSetHandleInlines.h"
 #include "mozilla/StyleSheet.h"
 #include "mozilla/StyleSheetInlines.h"
 #include "mozilla/dom/SVGSVGElement.h"
@@ -2137,7 +2135,7 @@ nsDocument::RemoveDocStyleSheetsFromStyleSets()
     if (sheet->IsApplicable()) {
       nsCOMPtr<nsIPresShell> shell = GetShell();
       if (shell) {
-        shell->StyleSet()->RemoveDocStyleSheet(sheet);
+        shell->StyleSet()->RemoveDocStyleSheet(sheet->AsConcrete());
       }
     }
     // XXX Tell observers?
@@ -2156,7 +2154,7 @@ nsDocument::RemoveStyleSheetsFromStyleSets(
     if (sheet->IsApplicable()) {
       nsCOMPtr<nsIPresShell> shell = GetShell();
       if (shell) {
-        shell->StyleSet()->RemoveStyleSheet(aType, sheet);
+        shell->StyleSet()->RemoveStyleSheet(aType, sheet->AsConcrete());
       }
     }
     // XXX Tell observers?
@@ -2171,21 +2169,16 @@ nsDocument::ResetStylesheetsToURI(nsIURI* aURI)
   mozAutoDocUpdate upd(this, UPDATE_STYLE, true);
   if (mStyleSetFilled) {
     // Skip removing style sheets from the style set if we know we haven't
-    // filled the style set.  (This allows us to avoid calling
-    // GetStyleBackendType() too early.)
+    // filled the style set.
     RemoveDocStyleSheetsFromStyleSets();
     RemoveStyleSheetsFromStyleSets(mOnDemandBuiltInUASheets, SheetType::Agent);
     RemoveStyleSheetsFromStyleSets(mAdditionalSheets[eAgentSheet], SheetType::Agent);
     RemoveStyleSheetsFromStyleSets(mAdditionalSheets[eUserSheet], SheetType::User);
     RemoveStyleSheetsFromStyleSets(mAdditionalSheets[eAuthorSheet], SheetType::Doc);
 
-    if (GetStyleBackendType() == StyleBackendType::Gecko) {
-      nsStyleSheetService *sheetService = nsStyleSheetService::GetInstance();
-      if (sheetService) {
-        RemoveStyleSheetsFromStyleSets(*sheetService->AuthorStyleSheets(), SheetType::Doc);
-      }
-    } else {
-      NS_ERROR("stylo: nsStyleSheetService doesn't handle ServoStyleSheets yet");
+    nsStyleSheetService *sheetService = nsStyleSheetService::GetInstance();
+    if (sheetService) {
+      RemoveStyleSheetsFromStyleSets(*sheetService->AuthorStyleSheets(), SheetType::Doc);
     }
 
     mStyleSetFilled = false;
@@ -2227,18 +2220,18 @@ nsDocument::ResetStylesheetsToURI(nsIURI* aURI)
 }
 
 static void
-AppendSheetsToStyleSet(StyleSetHandle aStyleSet,
+AppendSheetsToStyleSet(nsStyleSet* aStyleSet,
                        const nsTArray<RefPtr<StyleSheet>>& aSheets,
                        SheetType aType)
 {
   for (StyleSheet* sheet : Reversed(aSheets)) {
-    aStyleSet->AppendStyleSheet(aType, sheet);
+    aStyleSet->AppendStyleSheet(aType, sheet->AsConcrete());
   }
 }
 
 
 void
-nsDocument::FillStyleSet(StyleSetHandle aStyleSet)
+nsDocument::FillStyleSet(nsStyleSet* aStyleSet)
 {
   NS_PRECONDITION(aStyleSet, "Must have a style set");
   NS_PRECONDITION(aStyleSet->SheetCount(SheetType::Doc) == 0,
@@ -2248,27 +2241,22 @@ nsDocument::FillStyleSet(StyleSetHandle aStyleSet)
 
   for (StyleSheet* sheet : Reversed(mStyleSheets)) {
     if (sheet->IsApplicable()) {
-      aStyleSet->AddDocStyleSheet(sheet, this);
+      aStyleSet->AddDocStyleSheet(sheet->AsConcrete(), this);
     }
   }
 
-  if (aStyleSet->IsGecko()) {
-    nsStyleSheetService *sheetService = nsStyleSheetService::GetInstance();
-    if (sheetService) {
-      for (StyleSheet* sheet : *sheetService->AuthorStyleSheets()) {
-        aStyleSet->AppendStyleSheet(SheetType::Doc, sheet);
-      }
+  nsStyleSheetService *sheetService = nsStyleSheetService::GetInstance();
+  if (sheetService) {
+    for (StyleSheet* sheet : *sheetService->AuthorStyleSheets()) {
+      aStyleSet->AppendStyleSheet(SheetType::Doc, sheet->AsConcrete());
     }
+  }
 
-    // Iterate backwards to maintain order
-    for (StyleSheet* sheet : Reversed(mOnDemandBuiltInUASheets)) {
-      if (sheet->IsApplicable()) {
-        aStyleSet->PrependStyleSheet(SheetType::Agent, sheet);
-      }
+  // Iterate backwards to maintain order
+  for (StyleSheet* sheet : Reversed(mOnDemandBuiltInUASheets)) {
+    if (sheet->IsApplicable()) {
+      aStyleSet->PrependStyleSheet(SheetType::Agent, sheet->AsConcrete());
     }
-  } else {
-    NS_WARNING("stylo: Not yet checking nsStyleSheetService for Servo-backed "
-               "documents. See bug 1290224");
   }
 
   AppendSheetsToStyleSet(aStyleSet, mAdditionalSheets[eAgentSheet],
@@ -2345,10 +2333,6 @@ nsDocument::IsWebComponentsEnabled(JSContext* aCx, JSObject* aObject)
     do_QueryInterface(nsJSUtils::GetStaticScriptGlobal(global));
 
   nsIDocument* doc = window ? window->GetExtantDoc() : nullptr;
-  if (doc && doc->IsStyledByServo()) {
-    NS_WARNING("stylo: Web Components not supported yet");
-    return false;
-  }
 
   return true;
 }
@@ -3636,7 +3620,7 @@ nsDocument::TryChannelCharset(nsIChannel *aChannel,
 
 already_AddRefed<nsIPresShell>
 nsDocument::CreateShell(nsPresContext* aContext, nsViewManager* aViewManager,
-                        StyleSetHandle aStyleSet)
+                        nsStyleSet* aStyleSet)
 {
   NS_ASSERTION(!mPresShell, "We have a presshell already!");
 
@@ -4004,7 +3988,7 @@ nsDocument::AddOnDemandBuiltInUASheet(StyleSheet* aSheet)
       // do not override Firefox OS/Mobile's content.css sheet. Maybe we should
       // have an insertion point to match the order of
       // nsDocumentViewer::CreateStyleSet though?
-      shell->StyleSet()->PrependStyleSheet(SheetType::Agent, aSheet);
+      shell->StyleSet()->PrependStyleSheet(SheetType::Agent, aSheet->AsConcrete());
     }
   }
 
@@ -4016,7 +4000,7 @@ nsDocument::AddStyleSheetToStyleSets(StyleSheet* aSheet)
 {
   nsCOMPtr<nsIPresShell> shell = GetShell();
   if (shell) {
-    shell->StyleSet()->AddDocStyleSheet(aSheet, this);
+    shell->StyleSet()->AddDocStyleSheet(aSheet->AsConcrete(), this);
   }
 }
 
@@ -4083,7 +4067,7 @@ nsDocument::RemoveStyleSheetFromStyleSets(StyleSheet* aSheet)
 {
   nsCOMPtr<nsIPresShell> shell = GetShell();
   if (shell) {
-    shell->StyleSet()->RemoveDocStyleSheet(aSheet);
+    shell->StyleSet()->RemoveDocStyleSheet(aSheet->AsConcrete());
   }
 }
 
@@ -4257,7 +4241,7 @@ nsDocument::LoadAdditionalStyleSheet(additionalSheetType aType,
     return NS_ERROR_INVALID_ARG;
 
   // Loading the sheet sync.
-  RefPtr<css::Loader> loader = new css::Loader(GetStyleBackendType());
+  RefPtr<css::Loader> loader = new css::Loader();
 
   css::SheetParsingMode parsingMode;
   switch (aType) {
@@ -4302,7 +4286,7 @@ nsDocument::AddAdditionalStyleSheet(additionalSheetType aType, StyleSheet* aShee
   nsCOMPtr<nsIPresShell> shell = GetShell();
   if (shell) {
     SheetType type = ConvertAdditionalSheetType(aType);
-    shell->StyleSet()->AppendStyleSheet(type, aSheet);
+    shell->StyleSet()->AppendStyleSheet(type, aSheet->AsConcrete());
   }
 
   // Passing false, so documet.styleSheets.length will not be affected by
@@ -4330,7 +4314,7 @@ nsDocument::RemoveAdditionalStyleSheet(additionalSheetType aType, nsIURI* aSheet
       nsCOMPtr<nsIPresShell> shell = GetShell();
       if (shell) {
         SheetType type = ConvertAdditionalSheetType(aType);
-        shell->StyleSet()->RemoveStyleSheet(type, sheetRef);
+        shell->StyleSet()->RemoveStyleSheet(type, sheetRef->AsConcrete());
       }
     }
 
@@ -5908,15 +5892,9 @@ nsDocument::EnableStyleSheetsForSetInternal(const nsAString& aSheetSet,
     StyleSheet* sheet = SheetAt(index);
     NS_ASSERTION(sheet, "Null sheet in sheet list!");
 
-    // XXXheycam Make this work with ServoStyleSheets.
-    if (sheet->IsServo()) {
-      NS_ERROR("stylo: can't handle alternate ServoStyleSheets yet");
-      continue;
-    }
-
-    sheet->AsGecko()->GetTitle(title);
+    sheet->AsConcrete()->GetTitle(title);
     if (!title.IsEmpty()) {
-      sheet->AsGecko()->SetEnabled(title.Equals(aSheetSet));
+      sheet->AsConcrete()->SetEnabled(title.Equals(aSheetSet));
     }
   }
   if (aUpdateCSSLoader) {
@@ -9624,17 +9602,12 @@ nsIDocument::CreateStaticClone(nsIDocShell* aCloneContainer)
         RefPtr<StyleSheet> sheet = SheetAt(i);
         if (sheet) {
           if (sheet->IsApplicable()) {
-            // XXXheycam Need to make ServoStyleSheet cloning work.
-            if (sheet->IsGecko()) {
-              RefPtr<CSSStyleSheet> clonedSheet =
-                sheet->AsGecko()->Clone(nullptr, nullptr, clonedDoc, nullptr);
-              NS_WARNING_ASSERTION(clonedSheet,
-                                   "Cloning a stylesheet didn't work!");
-              if (clonedSheet) {
-                clonedDoc->AddStyleSheet(clonedSheet);
-              }
-            } else {
-              NS_ERROR("stylo: ServoStyleSheet doesn't support cloning");
+            RefPtr<CSSStyleSheet> clonedSheet =
+              sheet->AsConcrete()->Clone(nullptr, nullptr, clonedDoc, nullptr);
+            NS_WARNING_ASSERTION(clonedSheet,
+                                 "Cloning a stylesheet didn't work!");
+            if (clonedSheet) {
+              clonedDoc->AddStyleSheet(clonedSheet);
             }
           }
         }
@@ -9644,17 +9617,12 @@ nsIDocument::CreateStaticClone(nsIDocShell* aCloneContainer)
       for (StyleSheet* sheet : Reversed(thisAsDoc->mOnDemandBuiltInUASheets)) {
         if (sheet) {
           if (sheet->IsApplicable()) {
-            // XXXheycam Need to make ServoStyleSheet cloning work.
-            if (sheet->IsGecko()) {
-              RefPtr<CSSStyleSheet> clonedSheet =
-                sheet->AsGecko()->Clone(nullptr, nullptr, clonedDoc, nullptr);
-              NS_WARNING_ASSERTION(clonedSheet,
-                                   "Cloning a stylesheet didn't work!");
-              if (clonedSheet) {
-                clonedDoc->AddOnDemandBuiltInUASheet(clonedSheet);
-              }
-            } else {
-              NS_ERROR("stylo: ServoStyleSheet doesn't support cloning");
+            RefPtr<CSSStyleSheet> clonedSheet =
+              sheet->AsConcrete()->Clone(nullptr, nullptr, clonedDoc, nullptr);
+            NS_WARNING_ASSERTION(clonedSheet,
+                                 "Cloning a stylesheet didn't work!");
+            if (clonedSheet) {
+              clonedDoc->AddOnDemandBuiltInUASheet(clonedSheet);
             }
           }
         }
@@ -12510,14 +12478,8 @@ nsIDocument::FlushUserFontSet()
       nsTArray<nsFontFaceRuleContainer> rules;
       nsIPresShell* shell = GetShell();
       if (shell) {
-        // XXXheycam ServoStyleSets don't support exposing @font-face rules yet.
-        if (shell->StyleSet()->IsGecko()) {
-          if (!shell->StyleSet()->AsGecko()->AppendFontFaceRules(rules)) {
-            return;
-          }
-        } else {
-          NS_WARNING("stylo: ServoStyleSets cannot handle @font-face rules yet. "
-                     "See bug 1290237.");
+        if (!shell->StyleSet()->AppendFontFaceRules(rules)) {
+          return;
         }
       }
 
@@ -12601,31 +12563,6 @@ nsIDocument::ReportHasScrollLinkedEffect()
                                   NS_LITERAL_CSTRING("Async Pan/Zoom"),
                                   this, nsContentUtils::eLAYOUT_PROPERTIES,
                                   "ScrollLinkedEffectFound2");
-}
-
-void
-nsIDocument::UpdateStyleBackendType()
-{
-  MOZ_ASSERT(mStyleBackendType == StyleBackendType(0),
-             "no need to call UpdateStyleBackendType now");
-
-  // Assume Gecko by default.
-  mStyleBackendType = StyleBackendType::Gecko;
-
-#ifdef MOZ_STYLO
-  // XXX For now we use a Servo-backed style set only for (X)HTML documents
-  // in content docshells.  This should let us avoid implementing XUL-specific
-  // CSS features.  And apart from not supporting SVG properties in Servo
-  // yet, the root SVG element likes to create a style sheet for an SVG
-  // document before we have a pres shell (i.e. before we make the decision
-  // here about whether to use a Gecko- or Servo-backed style system), so
-  // we avoid Servo-backed style sets for SVG documents.
-  if (!mDocumentContainer) {
-    NS_WARNING("stylo: No docshell yet, assuming Gecko style system");
-  } else if (nsLayoutUtils::SupportsServoStyleBackend(this)) {
-    mStyleBackendType = StyleBackendType::Servo;
-  }
-#endif
 }
 
 /**

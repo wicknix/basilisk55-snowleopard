@@ -39,10 +39,8 @@
 #include "nsIMessageManager.h"
 #include "mozilla/RestyleLogging.h"
 #include "Units.h"
-#include "mozilla/RestyleManagerHandle.h"
 #include "prenv.h"
 #include "mozilla/StaticPresData.h"
-#include "mozilla/StyleBackendType.h"
 
 class nsAString;
 class nsIPrintSettings;
@@ -71,6 +69,7 @@ namespace mozilla {
 class EffectCompositor;
 class EventStateManager;
 class CounterStyleManager;
+class RestyleManager;
 namespace layers {
 class ContainerLayer;
 class LayerManager;
@@ -166,7 +165,7 @@ public:
    * Set and detach presentation shell that this context is bound to.
    * A presentation context may only be bound to a single shell.
    */
-  void AttachShell(nsIPresShell* aShell, mozilla::StyleBackendType aBackendType);
+  void AttachShell(nsIPresShell* aShell);
   void DetachShell();
 
 
@@ -229,7 +228,7 @@ public:
   }
 
 #ifdef MOZILLA_INTERNAL_API
-  mozilla::StyleSetHandle StyleSet() const { return GetPresShell()->StyleSet(); }
+  nsStyleSet* StyleSet() const { return GetPresShell()->StyleSet(); }
 
   nsFrameManager* FrameManager()
     { return PresShell()->FrameManager(); }
@@ -243,7 +242,7 @@ public:
 
   nsRefreshDriver* RefreshDriver() { return mRefreshDriver; }
 
-  mozilla::RestyleManagerHandle RestyleManager() {
+  mozilla::RestyleManager* RestyleManager() {
     MOZ_ASSERT(mRestyleManager);
     return mRestyleManager;
   }
@@ -1257,7 +1256,7 @@ protected:
   RefPtr<mozilla::EffectCompositor> mEffectCompositor;
   RefPtr<nsTransitionManager> mTransitionManager;
   RefPtr<nsAnimationManager> mAnimationManager;
-  mozilla::RestyleManagerHandle::RefPtr mRestyleManager;
+  RefPtr<mozilla::RestyleManager> mRestyleManager;
   RefPtr<mozilla::CounterStyleManager> mCounterStyleManager;
   nsIAtom* MOZ_UNSAFE_REF("always a static atom") mMedium; // initialized by subclass ctors
   nsCOMPtr<nsIAtom> mMediaEmulated;

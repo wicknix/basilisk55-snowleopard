@@ -392,15 +392,6 @@ nsStyleBorder::~nsStyleBorder()
   }
 }
 
-void
-nsStyleBorder::FinishStyle(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(aPresContext->StyleSet()->IsServo());
-
-  mBorderImageSource.ResolveImage(aPresContext);
-}
-
 nsMargin
 nsStyleBorder::GetImageOutset() const
 {
@@ -602,14 +593,8 @@ nsStyleList::nsStyleList(const nsPresContext* aContext)
   : mListStylePosition(NS_STYLE_LIST_STYLE_POSITION_OUTSIDE)
 {
   MOZ_COUNT_CTOR(nsStyleList);
-  if (aContext->StyleSet()->IsServo()) {
-    // FIXME: bug 1328319.
-    mCounterStyle =
-      CounterStyleManager::GetBuiltinStyle(NS_STYLE_LIST_STYLE_DISC);
-  } else {
-    mCounterStyle = aContext->CounterStyleManager()->
-      BuildCounterStyle(NS_LITERAL_STRING("disc"));
-  }
+  mCounterStyle = aContext->CounterStyleManager()->
+    BuildCounterStyle(NS_LITERAL_STRING("disc"));
   SetQuotesInitial();
 }
 
@@ -626,17 +611,6 @@ nsStyleList::nsStyleList(const nsStyleList& aSource)
   , mImageRegion(aSource.mImageRegion)
 {
   MOZ_COUNT_CTOR(nsStyleList);
-}
-
-void
-nsStyleList::FinishStyle(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(aPresContext->StyleSet()->IsServo());
-
-  if (mListStyleImage && !mListStyleImage->IsResolved()) {
-    mListStyleImage->Resolve(aPresContext);
-  }
 }
 
 void
@@ -1160,14 +1134,6 @@ nsStyleSVGReset::Destroy(nsPresContext* aContext)
     FreeByObjectID(mozilla::eArenaObjectID_nsStyleSVGReset, this);
 }
 
-void
-nsStyleSVGReset::FinishStyle(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(aPresContext->StyleSet()->IsServo());
-
-  mMask.ResolveImages(aPresContext);
-}
 
 nsChangeHint
 nsStyleSVGReset::CalcDifference(const nsStyleSVGReset& aNewData) const
@@ -1924,7 +1890,6 @@ nsStyleImageRequest::nsStyleImageRequest(Mode aModeFlags,
   , mImageValue(aImageValue)
   , mImageTracker(aImageTracker)
   , mModeFlags(aModeFlags)
-  , mResolved(true)
 {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(aImageValue);
@@ -1933,19 +1898,6 @@ nsStyleImageRequest::nsStyleImageRequest(Mode aModeFlags,
   if (mRequestProxy) {
     MaybeTrackAndLock();
   }
-}
-
-nsStyleImageRequest::nsStyleImageRequest(
-    Mode aModeFlags,
-    nsStringBuffer* aURLBuffer,
-    already_AddRefed<PtrHolder<nsIURI>> aBaseURI,
-    already_AddRefed<PtrHolder<nsIURI>> aReferrer,
-    already_AddRefed<PtrHolder<nsIPrincipal>> aPrincipal)
-  : mModeFlags(aModeFlags)
-  , mResolved(false)
-{
-  mImageValue = new css::ImageValue(aURLBuffer, Move(aBaseURI),
-                                    Move(aReferrer), Move(aPrincipal));
 }
 
 nsStyleImageRequest::~nsStyleImageRequest()
@@ -1971,43 +1923,10 @@ nsStyleImageRequest::~nsStyleImageRequest()
   MOZ_ASSERT(!mImageTracker);
 }
 
-bool
-nsStyleImageRequest::Resolve(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(!IsResolved(), "already resolved");
-
-  mResolved = true;
-
-  // For now, just have unique nsCSSValue/ImageValue objects.  We should
-  // really store the ImageValue on the Servo specified value, so that we can
-  // share imgRequestProxys that come from the same rule in the same
-  // document.
-  mImageValue->Initialize(aPresContext->Document());
-
-  nsCSSValue value;
-  value.SetImageValue(mImageValue);
-  mRequestProxy = value.GetPossiblyStaticImageValue(aPresContext->Document(),
-                                                    aPresContext);
-
-  if (!mRequestProxy) {
-    // The URL resolution or image load failed.
-    return false;
-  }
-
-  if (mModeFlags & Mode::Track) {
-    mImageTracker = aPresContext->Document()->ImageTracker();
-  }
-
-  MaybeTrackAndLock();
-  return true;
-}
-
 void
 nsStyleImageRequest::MaybeTrackAndLock()
 {
   MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(IsResolved());
   MOZ_ASSERT(mRequestProxy);
 
   if (mModeFlags & Mode::Track) {
@@ -2970,15 +2889,6 @@ nsStyleBackground::Destroy(nsPresContext* aContext)
   this->~nsStyleBackground();
   aContext->PresShell()->
     FreeByObjectID(eArenaObjectID_nsStyleBackground, this);
-}
-
-void
-nsStyleBackground::FinishStyle(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(aPresContext->StyleSet()->IsServo());
-
-  mImage.ResolveImages(aPresContext);
 }
 
 nsChangeHint
@@ -4033,19 +3943,6 @@ nsStyleUserInterface::nsStyleUserInterface(const nsStyleUserInterface& aSource)
 nsStyleUserInterface::~nsStyleUserInterface()
 {
   MOZ_COUNT_DTOR(nsStyleUserInterface);
-}
-
-void
-nsStyleUserInterface::FinishStyle(nsPresContext* aPresContext)
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(aPresContext->StyleSet()->IsServo());
-
-  for (nsCursorImage& cursor : mCursorImages) {
-    if (cursor.mImage && !cursor.mImage->IsResolved()) {
-      cursor.mImage->Resolve(aPresContext);
-    }
-  }
 }
 
 nsChangeHint

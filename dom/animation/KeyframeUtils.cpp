@@ -10,8 +10,6 @@
 #include "mozilla/Move.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/RangedArray.h"
-#include "mozilla/ServoBindings.h"
-#include "mozilla/ServoBindingTypes.h"
 #include "mozilla/StyleAnimationValue.h"
 #include "mozilla/TimingParams.h"
 #include "mozilla/dom/BaseKeyframeTypesBinding.h" // For FastBaseKeyframe etc.
@@ -274,7 +272,6 @@ struct KeyframeValueEntry
 {
   nsCSSPropertyID mProperty;
   StyleAnimationValue mValue;
-  RefPtr<RawServoAnimationValue> mServoValue;
 
   float mOffset;
   Maybe<ComputedTimingFunction> mTimingFunction;
@@ -325,12 +322,8 @@ public:
 // ------------------------------------------------------------------
 
 inline bool
-IsInvalidValuePair(const PropertyValuePair& aPair, StyleBackendType aBackend)
+IsInvalidValuePair(const PropertyValuePair& aPair)
 {
-  if (aBackend == StyleBackendType::Servo) {
-    return !aPair.mServoDeclarationBlock;
-  }
-
   // There are three types of values we store as token streams:
   //
   // * Shorthand values (where we manually extract the token stream's string
@@ -471,9 +464,7 @@ KeyframeUtils::GetKeyframesFromObject(JSContext* aCx,
     return keyframes;
   }
 
-  // FIXME: Bug 1311257: Support missing keyframes for Servo backend.
-  if ((!AnimationUtils::IsCoreAPIEnabled() ||
-       aDocument->IsStyledByServo()) &&
+  if (!AnimationUtils::IsCoreAPIEnabled() &&
        (!nsDocument::AreWebAnimationsImplicitKeyframesEnabled(aCx, nullptr) &&
       HasImplicitKeyframeValues(keyframes, aDocument))) {
     keyframes.Clear();
@@ -602,32 +593,15 @@ KeyframeUtils::GetComputedKeyframeValues(const nsTArray<Keyframe>& aKeyframes,
   MOZ_ASSERT(aStyleContext);
   MOZ_ASSERT(aElement);
 
-  StyleBackendType styleBackend = aElement->OwnerDoc()->GetStyleBackendType();
-
   const size_t len = aKeyframes.Length();
   nsTArray<ComputedKeyframeValues> result(len);
-
-  const ServoComputedValues* currentStyle = nullptr;
-  const ServoComputedValues* parentStyle = nullptr;
-
-  if (styleBackend == StyleBackendType::Servo) {
-    currentStyle = aStyleContext->StyleSource().AsServoComputedValues();
-    if (aStyleContext->GetParent()) {
-      parentStyle = aStyleContext->GetParent()->StyleSource().AsServoComputedValues();
-    }
-  }
 
   for (const Keyframe& frame : aKeyframes) {
     nsCSSPropertyIDSet propertiesOnThisKeyframe;
     ComputedKeyframeValues* computedValues = result.AppendElement();
     for (const PropertyValuePair& pair :
            PropertyPriorityIterator(frame.mPropertyValues)) {
-      MOZ_ASSERT(!pair.mServoDeclarationBlock ||
-                 styleBackend == StyleBackendType::Servo,
-                 "Animation values were parsed using Servo backend but target"
-                 " element is not using Servo backend?");
-
-      if (IsInvalidValuePair(pair, styleBackend)) {
+      if (IsInvalidValuePair(pair)) {
         continue;
       }
 
@@ -635,38 +609,25 @@ KeyframeUtils::GetComputedKeyframeValues(const nsTArray<Keyframe>& aKeyframes,
       // a KeyframeValueEntry for each value.
       nsTArray<PropertyStyleAnimationValuePair> values;
 
-      if (styleBackend == StyleBackendType::Servo) {
+      // For shorthands, we store the string as a token stream so we need to
+      // extract that first.
+      if (nsCSSProps::IsShorthand(pair.mProperty)) {
+        nsCSSValueTokenStream* tokenStream = pair.mValue.GetTokenStreamValue();
         if (!StyleAnimationValue::ComputeValues(pair.mProperty,
-              CSSEnabledState::eForAllContent, aStyleContext,
-              *pair.mServoDeclarationBlock, values)) {
+              CSSEnabledState::eForAllContent, aElement, aStyleContext,
+              tokenStream->mTokenStream, /* aUseSVGMode */ false, values) ||
+            IsComputeValuesFailureKey(pair)) {
           continue;
         }
-        Servo_AnimationValues_Populate(&values,
-                                       pair.mServoDeclarationBlock,
-                                       currentStyle,
-                                       parentStyle,
-                                       aStyleContext->PresContext());
       } else {
-        // For shorthands, we store the string as a token stream so we need to
-        // extract that first.
-        if (nsCSSProps::IsShorthand(pair.mProperty)) {
-          nsCSSValueTokenStream* tokenStream = pair.mValue.GetTokenStreamValue();
-          if (!StyleAnimationValue::ComputeValues(pair.mProperty,
-                CSSEnabledState::eForAllContent, aElement, aStyleContext,
-                tokenStream->mTokenStream, /* aUseSVGMode */ false, values) ||
-              IsComputeValuesFailureKey(pair)) {
-            continue;
-          }
-        } else {
-          if (!StyleAnimationValue::ComputeValues(pair.mProperty,
-                CSSEnabledState::eForAllContent, aElement, aStyleContext,
-                pair.mValue, /* aUseSVGMode */ false, values)) {
-            continue;
-          }
-          MOZ_ASSERT(values.Length() == 1,
-                    "Longhand properties should produce a single"
-                    " StyleAnimationValue");
+        if (!StyleAnimationValue::ComputeValues(pair.mProperty,
+              CSSEnabledState::eForAllContent, aElement, aStyleContext,
+              pair.mValue, /* aUseSVGMode */ false, values)) {
+          continue;
         }
+        MOZ_ASSERT(values.Length() == 1,
+                  "Longhand properties should produce a single"
+                  " StyleAnimationValue");
       }
 
       for (auto& value : values) {
@@ -707,7 +668,6 @@ KeyframeUtils::GetAnimationPropertiesFromKeyframes(
       entry->mOffset = frame.mComputedOffset;
       entry->mProperty = value.mProperty;
       entry->mValue = value.mValue;
-      entry->mServoValue = value.mServoValue;
       entry->mTimingFunction = frame.mTimingFunction;
       entry->mComposite =
         frame.mComposite ? frame.mComposite.value() : aEffectComposite;
@@ -1024,30 +984,6 @@ MakePropertyValuePair(nsCSSPropertyID aProperty, const nsAString& aStringValue,
 
   result.mProperty = aProperty;
 
-  if (aDocument->GetStyleBackendType() == StyleBackendType::Servo) {
-    nsCString name = nsCSSProps::GetStringValue(aProperty);
-
-    NS_ConvertUTF16toUTF8 value(aStringValue);
-    RefPtr<ThreadSafeURIHolder> base =
-      new ThreadSafeURIHolder(aDocument->GetDocumentURI());
-    RefPtr<ThreadSafeURIHolder> referrer =
-      new ThreadSafeURIHolder(aDocument->GetDocumentURI());
-    RefPtr<ThreadSafePrincipalHolder> principal =
-      new ThreadSafePrincipalHolder(aDocument->NodePrincipal());
-
-    nsCString baseString;
-    aDocument->GetDocumentURI()->GetSpec(baseString);
-
-    RefPtr<RawServoDeclarationBlock> servoDeclarationBlock =
-      Servo_ParseProperty(&name, &value, &baseString,
-                          base, referrer, principal).Consume();
-
-    if (servoDeclarationBlock) {
-      result.mServoDeclarationBlock = servoDeclarationBlock.forget();
-      return result;
-    }
-  }
-
   nsCSSValue value;
   if (!nsCSSProps::IsShorthand(aProperty)) {
     aParser.ParseLonghandProperty(aProperty,
@@ -1079,13 +1015,6 @@ MakePropertyValuePair(nsCSSPropertyID aProperty, const nsAString& aStringValue,
                "The shorthand property of a token stream should be initialized"
                " to unknown");
     value.SetTokenStreamValue(tokenStream);
-  } else {
-    // If we succeeded in parsing with Gecko, but not Servo the animation is
-    // not going to work since, for the purposes of animation, we're going to
-    // ignore |mValue| when the backend is Servo.
-    NS_WARNING_ASSERTION(aDocument->GetStyleBackendType() !=
-                           StyleBackendType::Servo,
-                         "Gecko succeeded in parsing where Servo failed");
   }
 
   result.mValue = value;
@@ -1407,8 +1336,6 @@ BuildSegmentsFromValueEntries(nsTArray<KeyframeValueEntry>& aEntries,
     segment->mToKey          = aEntries[j].mOffset;
     segment->mFromValue      = aEntries[i].mValue;
     segment->mToValue        = aEntries[j].mValue;
-    segment->mServoFromValue = aEntries[i].mServoValue;
-    segment->mServoToValue   = aEntries[j].mServoValue;
     segment->mTimingFunction = aEntries[i].mTimingFunction;
     segment->mFromComposite  = aEntries[i].mComposite;
     segment->mToComposite    = aEntries[j].mComposite;
@@ -1468,8 +1395,6 @@ GetKeyframeListFromPropertyIndexedKeyframe(JSContext* aCx,
     return;
   }
 
-  bool isServoBackend = aDocument->IsStyledByServo();
-
   // Create a set of keyframes for each property.
   nsCSSParser parser(aDocument->CSSLoader());
   nsClassHashtable<nsFloatHashKey, Keyframe> processedKeyframes;
@@ -1482,15 +1407,14 @@ GetKeyframeListFromPropertyIndexedKeyframe(JSContext* aCx,
 
     // If we only have one value, we should animate from the underlying value
     // using additive animation--however, we don't support additive animation
-    // for Servo backend (bug 1311257) or when the core animation API pref is
-    // switched off.
-    if ((!AnimationUtils::IsCoreAPIEnabled() || isServoBackend) &&
+    // when the core animation API pref is switched off.
+    if (!AnimationUtils::IsCoreAPIEnabled() &&
         !Preferences::GetBool("dom.animations-api.implicit-keyframes.enabled") &&
         count == 1) {
       // We don't support implicit keyframes by preference.
       aRv.Throw(NS_ERROR_DOM_ANIM_MISSING_PROPS_ERR);
       return;
-    } else if ((!AnimationUtils::IsCoreAPIEnabled() || isServoBackend) &&
+    } else if (!AnimationUtils::IsCoreAPIEnabled() &&
                count == 1) {
       // Implicit keyframes isn't implemented yet and so we can't
       // support an animation that goes from the underlying value
@@ -1567,8 +1491,6 @@ HasImplicitKeyframeValues(const nsTArray<Keyframe>& aKeyframes,
     }
   };
 
-  StyleBackendType styleBackend = aDocument->GetStyleBackendType();
-
   for (size_t i = 0, len = aKeyframes.Length(); i < len; i++) {
     const Keyframe& frame = aKeyframes[i];
 
@@ -1584,25 +1506,18 @@ HasImplicitKeyframeValues(const nsTArray<Keyframe>& aKeyframes,
                          : computedOffset;
 
     for (const PropertyValuePair& pair : frame.mPropertyValues) {
-      if (IsInvalidValuePair(pair, styleBackend)) {
+      if (IsInvalidValuePair(pair)) {
         continue;
       }
 
       if (nsCSSProps::IsShorthand(pair.mProperty)) {
-        if (styleBackend == StyleBackendType::Gecko) {
-          nsCSSValueTokenStream* tokenStream =
-            pair.mValue.GetTokenStreamValue();
-          nsCSSParser parser(aDocument->CSSLoader());
-          if (!parser.IsValueValidForProperty(pair.mProperty,
-                                              tokenStream->mTokenStream)) {
-            continue;
-          }
+        nsCSSValueTokenStream* tokenStream =
+          pair.mValue.GetTokenStreamValue();
+        nsCSSParser parser(aDocument->CSSLoader());
+        if (!parser.IsValueValidForProperty(pair.mProperty,
+                                            tokenStream->mTokenStream)) {
+          continue;
         }
-        // For the Servo backend, invalid shorthand values are represented by
-        // a null mServoDeclarationBlock member which we skip above in
-        // IsInvalidValuePair.
-        MOZ_ASSERT(styleBackend != StyleBackendType::Servo ||
-                   pair.mServoDeclarationBlock);
         CSSPROPS_FOR_SHORTHAND_SUBPROPERTIES(
             prop, pair.mProperty, CSSEnabledState::eForAllContent) {
           addToPropertySets(*prop, offsetToUse);

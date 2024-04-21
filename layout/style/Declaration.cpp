@@ -59,9 +59,14 @@ ImportantStyleData::List(FILE* out, int32_t aIndent) const
 }
 #endif
 
+Declaration::Declaration()
+  : mImmutable(false)
+{
+  mContainer.mRaw = 0;
+}
+
 Declaration::Declaration(const Declaration& aCopy)
-  : DeclarationBlock(aCopy),
-    mOrder(aCopy.mOrder),
+  : mOrder(aCopy.mOrder),
     mVariableOrder(aCopy.mVariableOrder),
     mData(aCopy.mData ? aCopy.mData->Clone() : nullptr),
     mImportantData(aCopy.mImportantData ?
@@ -71,7 +76,8 @@ Declaration::Declaration(const Declaration& aCopy)
         nullptr),
     mImportantVariables(aCopy.mImportantVariables ?
         new CSSVariableDeclarations(*aCopy.mImportantVariables) :
-        nullptr)
+        nullptr),
+    mImmutable(false)
 {
 }
 
@@ -1476,6 +1482,10 @@ Declaration::GetPropertyValueInternal(
       }
       MOZ_FALLTHROUGH;
     }
+    case eCSSProperty_margin_block:
+    case eCSSProperty_margin_inline:
+    case eCSSProperty_padding_block:
+    case eCSSProperty_padding_inline:
     case eCSSProperty_gap: {
       const nsCSSPropertyID* subprops =
         nsCSSProps::SubpropertyEntryFor(aProperty);
@@ -1849,6 +1859,24 @@ Declaration::InitializeEmpty()
 {
   MOZ_ASSERT(!mData && !mImportantData, "already initialized");
   mData = nsCSSCompressedDataBlock::CreateEmptyBlock();
+}
+
+already_AddRefed<Declaration>
+Declaration::Clone() const
+{
+  RefPtr<Declaration> result;
+  result = new Declaration(*this);
+  return result.forget();
+}
+
+already_AddRefed<Declaration>
+Declaration::EnsureMutable()
+{
+  AssertNotExpanded();
+  if (!IsMutable()) {
+    return Clone();
+  }
+  return do_AddRef(this);
 }
 
 size_t

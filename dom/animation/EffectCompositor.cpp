@@ -15,8 +15,7 @@
 #include "mozilla/AnimationUtils.h"
 #include "mozilla/EffectSet.h"
 #include "mozilla/LayerAnimationInfo.h"
-#include "mozilla/RestyleManagerHandle.h"
-#include "mozilla/RestyleManagerHandleInlines.h"
+#include "mozilla/RestyleManager.h"
 #include "mozilla/StyleAnimationValue.h"
 #include "nsComputedDOMStyle.h" // nsComputedDOMStyle::GetPresShellForContent
 #include "nsCSSPropertyIDSet.h"
@@ -149,11 +148,6 @@ FindAnimationsForCompositor(const nsIFrame* aFrame,
     return false;
   }
 
-  if (aFrame->StyleContext()->StyleSource().IsServoComputedValues()) {
-    NS_ERROR("stylo: cannot handle compositor-driven animations yet");
-    return false;
-  }
-
   // The animation cascade will almost always be up-to-date by this point
   // but there are some cases such as when we are restoring the refresh driver
   // from test control after seeking where it might not be the case.
@@ -274,12 +268,7 @@ EffectCompositor::RequestRestyle(dom::Element* aElement,
 
   if (aRestyleType == RestyleType::Layer) {
     // Prompt layers to re-sync their animations.
-    if (mPresContext->RestyleManager()->IsServo()) {
-      NS_ERROR("stylo: Servo-backed style system should not be using "
-               "EffectCompositor");
-      return;
-    }
-    mPresContext->RestyleManager()->AsGecko()->IncrementAnimationGeneration();
+    mPresContext->RestyleManager()->IncrementAnimationGeneration();
     EffectSet* effectSet =
       EffectSet::GetEffectSet(aElement, aPseudoType);
     if (effectSet) {
@@ -391,10 +380,7 @@ EffectCompositor::GetAnimationRule(dom::Element* aElement,
     return nullptr;
   }
 
-  MOZ_ASSERT(mPresContext->RestyleManager()->IsGecko(),
-             "stylo: Servo-backed style system should not be using "
-             "EffectCompositor");
-  if (mPresContext->RestyleManager()->AsGecko()->SkipAnimationRules()) {
+  if (mPresContext->RestyleManager()->SkipAnimationRules()) {
     // We don't need to worry about updating mElementsToRestyle in this case
     // since this is not the animation restyle we requested when we called
     // PostRestyleForAnimation (see comment at start of this method).

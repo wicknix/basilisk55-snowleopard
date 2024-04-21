@@ -29,8 +29,7 @@
 #include "nsIServiceManager.h"
 #include "nsContainerFrame.h"
 #include "nsContentCID.h"
-#include "mozilla/StyleSetHandle.h"
-#include "mozilla/StyleSetHandleInlines.h"
+#include "nsStyleSet.h"
 #include "nsLayoutUtils.h"
 #include "nsDisplayList.h"
 #include "nsContentUtils.h"
@@ -286,8 +285,7 @@ nsSplitterFrame::Init(nsIContent*       aContent,
                           NS_LITERAL_STRING("vertical"), false);
         nsStyleContext* parentStyleContext = StyleContext()->GetParent();
         RefPtr<nsStyleContext> newContext = PresContext()->StyleSet()->
-          ResolveStyleFor(aContent->AsElement(), parentStyleContext,
-                          LazyComputeBehavior::Allow);
+          ResolveStyleFor(aContent->AsElement(), parentStyleContext);
         SetStyleContextWithoutNotification(newContext);
       }
     }
