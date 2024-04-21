@@ -602,7 +602,7 @@ pref("media.mediasource.webm.enabled", true);
 pref("media.mediasource.webm.audio.enabled", true);
 
 #ifdef MOZ_AV1
-pref("media.av1.enabled", false);
+pref("media.av1.enabled", true);
 #endif
 
 // Use new MediaFormatReader architecture for plain ogg.
@@ -3753,6 +3753,8 @@ pref("browser.drag_out_of_frame_style", 1);
 pref("ui.key.saveLink.shift", false); // true = shift, false = meta
 
 pref("font.name-list.emoji", "Apple Color Emoji");
+pref("font.name-list.emoji", "Twemoji Mozilla");
+
 
 // default fonts (in UTF8 and using canonical names)
 // to determine canonical font names, use a debug build and

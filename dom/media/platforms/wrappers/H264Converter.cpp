@@ -9,6 +9,7 @@
 #include "ImageContainer.h"
 #include "MediaInfo.h"
 #include "MediaPrefs.h"
+#include "PDMFactory.h"
 #include "mp4_demuxer/AnnexB.h"
 #include "mp4_demuxer/H264.h"
 
@@ -183,9 +184,9 @@ H264Converter::CreateDecoder(DecoderDoctorDiagnostics* aDiagnostics)
     if (spsdata.profile_idc == 244 /* Hi444PP */ ||
         spsdata.chroma_format_idc == PDMFactory::kYUV444) {
       mLastError = NS_ERROR_FAILURE;
-      if (aDiagnostics) {
-        aDiagnostics->SetVideoNotSupported();
-      }
+      //if (aDiagnostics) {
+        //aDiagnostics->SetVideoNotSupported();
+      //}
       return NS_ERROR_FAILURE;
     }
   } else {

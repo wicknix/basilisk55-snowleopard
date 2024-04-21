@@ -222,7 +222,7 @@ static inline z_vec128i_t v_load64_dup(const void* src) {
 #if 0//def _WIN64
   return _mm_set1_epi64x(i64);
 #else
-  _declspec(align(16)) uint64_t temp[2] = {i64, i64};
+  _declspec(align(16)); uint64_t temp[2] = {i64, i64};
   return _mm_load_si128((const __m128i*)temp);
 #endif
 }

@@ -556,6 +556,7 @@ audiounit_get_input_device_id(AudioDeviceID * device_id)
 static int audiounit_stream_get_volume(cubeb_stream * stm, float * volume);
 static int audiounit_stream_set_volume(cubeb_stream * stm, float volume);
 static int audiounit_uninstall_device_changed_callback(cubeb_stream * stm);
+static int audiounit_install_system_changed_callback(cubeb_stream * stm);
 
 static int
 audiounit_reinit_stream(cubeb_stream * stm)
@@ -1821,7 +1822,9 @@ audiounit_stream_init(cubeb * context,
     return r;
   }
 
-  r = audiounit_install_system_changed_callback(stm);
+  //r = audiounit_install_system_changed_callback(stm);
+  r = CUBEB_OK;
+  // TODO: fix ugly hack
   if (r != CUBEB_OK) {
     LOG("(%p) Could not install the device change callback.", stm.get());
     return r;

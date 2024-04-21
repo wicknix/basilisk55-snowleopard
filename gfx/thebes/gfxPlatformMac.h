@@ -77,10 +77,14 @@ public:
       return true;
     }
 
+    virtual bool UseProgressivePaint() override;
     virtual already_AddRefed<mozilla::gfx::VsyncSource> CreateHardwareVsyncSource() override;
 
     // lower threshold on font anti-aliasing
     uint32_t GetAntiAliasingThreshold() { return mFontAntiAliasingThreshold; }
+
+protected:
+  bool AccelerateLayersByDefault() override;
 
 private:
     virtual void GetPlatformCMSOutputProfile(void* &mem, size_t &size) override;

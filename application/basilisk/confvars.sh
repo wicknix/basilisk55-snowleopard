@@ -3,17 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-MOZ_APP_BASENAME=Basilisk
-MOZ_APP_VENDOR=Moonchild
+MOZ_APP_BASENAME=InterWeb
+MOZ_APP_VENDOR=InterWeb
 MOZ_PHOENIX=1
 MC_BASILISK=1
 MOZ_UPDATER=1
 
-if test "$MOZ_WIDGET_TOOLKIT" = "windows" -o \
-        "$MOZ_WIDGET_TOOLKIT" = "gtk2" -o \
-        "$MOZ_WIDGET_TOOLKIT" = "gtk3"; then
-  MOZ_BUNDLED_FONTS=1
-fi
+
+MOZ_BUNDLED_FONTS=1
+
 
 if test "$OS_ARCH" = "WINNT"; then
   MOZ_MAINTENANCE_SERVICE=

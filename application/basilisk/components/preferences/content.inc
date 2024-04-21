@@ -237,14 +237,6 @@
                     accesskey="&javascriptWasm.accesskey;" />
         </vbox>
       </row>
-      <row id="javascriptRow2">
-        <vbox align="start">
-          <checkbox id="javascriptWebRTCPolicy"
-                    preference="media.peerconnection.enabled"
-                    label="&javascriptWebrtc.label;"
-                    accesskey="&javascriptWebrtc.accesskey;" />
-        </vbox>
-      </row>
     </rows>
   </grid>
 </groupbox>

@@ -277,6 +277,10 @@ public:
     bool AllowOpenGLCanvas();
     virtual void InitializeSkiaCacheLimits();
 
+    /// These should be used instead of directly accessing the preference,
+    /// as different platforms may override the behaviour.
+    virtual bool UseProgressivePaint();
+
     static bool AsyncPanZoomEnabled();
 
     virtual void GetAzureBackendInfo(mozilla::widget::InfoObject &aObj);
@@ -711,7 +715,7 @@ protected:
     virtual already_AddRefed<mozilla::gfx::VsyncSource> CreateHardwareVsyncSource();
 
     // Returns whether or not layers should be accelerated by default on this platform.
-    bool AccelerateLayersByDefault();
+    virtual bool AccelerateLayersByDefault();
 
     // Returns a prioritized list of available compositor backends for acceleration.
     virtual void GetAcceleratedCompositorBackends(nsTArray<mozilla::layers::LayersBackend>& aBackends);

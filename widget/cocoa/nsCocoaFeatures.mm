@@ -13,6 +13,7 @@
 
 #define MAC_OS_X_VERSION_MASK      0x0000FFFF
 #define MAC_OS_X_VERSION_10_0_HEX  0x00001000
+#define MAC_OS_X_VERSION_10_6_HEX  0x00001060
 #define MAC_OS_X_VERSION_10_7_HEX  0x00001070
 #define MAC_OS_X_VERSION_10_8_HEX  0x00001080
 #define MAC_OS_X_VERSION_10_9_HEX  0x00001090
@@ -90,12 +91,12 @@ int32_t nsCocoaFeatures::GetVersion(int32_t aMajor, int32_t aMinor, int32_t aBug
     int32_t osxVersion;
     if (aMajor < 10) {
         aMajor = 10;
-        NS_ERROR("Couldn't determine OS X version, assuming 10.7");
-        osxVersion = MAC_OS_X_VERSION_10_7_HEX;
-    } else if (aMinor < 7) {
-        aMinor = 7;
-        NS_ERROR("OS X version too old, assuming 10.7");
-        osxVersion = MAC_OS_X_VERSION_10_7_HEX;
+        NS_ERROR("Couldn't determine OS X version, assuming 10.6");
+        osxVersion = MAC_OS_X_VERSION_10_6_HEX;
+    } else if (aMinor < 6) {
+        aMinor = 6;
+        NS_ERROR("OS X version too old, assuming 10.6");
+        osxVersion = MAC_OS_X_VERSION_10_6_HEX;
     } else {
         MOZ_ASSERT(aMajor == 10); // For now, even though we're ready...
         MOZ_ASSERT(aMinor < 16);
@@ -157,6 +158,24 @@ nsCocoaFeatures::OSXVersionBugFix()
 }
 
 /* static */ bool
+nsCocoaFeatures::OnLionOrLater()
+{
+    return (OSXVersion() >= MAC_OS_X_VERSION_10_7_HEX);
+}
+
+/* static */ bool
+nsCocoaFeatures::OnMountainLionOrLater()
+{
+    return (OSXVersion() >= MAC_OS_X_VERSION_10_8_HEX);
+}
+
+/* static */ bool
+nsCocoaFeatures::OnMavericksOrLater()
+{
+    return (OSXVersion() >= MAC_OS_X_VERSION_10_9_HEX);
+}
+
+/* static */ bool
 nsCocoaFeatures::OnYosemiteOrLater()
 {
     return (OSXVersion() >= MAC_OS_X_VERSION_10_10_HEX);
@@ -196,7 +215,7 @@ nsCocoaFeatures::OnMojaveOrLater()
 /* static */ bool 
 nsCocoaFeatures::OnCatalinaOrLater() 
 {
-  return (macOSVersion() >= MAC_OS_X_VERSION_10_15_HEX);
+  return (OSXVersion() >= MAC_OS_X_VERSION_10_15_HEX);
 }
 
 /* static */ bool
@@ -212,8 +231,8 @@ nsCocoaFeatures::OnBigSurOrLater()
   // launched from the command line, see bug 1727624. (This only applies to
   // the Intel build - the arm64 build is linked against a Big Sur SDK and
   // always sees the correct version.)
-  return ((macOSVersion() >= MAC_OS_X_VERSION_10_16_HEX) ||
-          (macOSVersion() >= MAC_OS_X_VERSION_11_0_HEX));
+  return ((OSXVersion() >= MAC_OS_X_VERSION_10_16_HEX) ||
+          (OSXVersion() >= MAC_OS_X_VERSION_11_0_HEX));
 }
 
 /* static */ bool
@@ -223,13 +242,19 @@ nsCocoaFeatures::OnMontereyOrLater()
   // In practice, this means that an Intel build can return false
   // from this function if it's launched from the command line, see bug 1727624.
   // This will not be an issue anymore once we link against the Big Sur SDK.
-  return (macOSVersion() >= MAC_OS_X_VERSION_12_0_HEX);
+  return (OSXVersion() >= MAC_OS_X_VERSION_12_0_HEX);
 }
 
 /* static */ bool
 nsCocoaFeatures::OnVenturaOrLater() 
 {
-  return (macOSVersion() >= MAC_OS_X_VERSION_13_0_HEX);
+  return (OSXVersion() >= MAC_OS_X_VERSION_13_0_HEX);
+}
+
+/* static */ bool
+nsCocoaFeatures::AccelerateByDefault()
+{
+    return IsAtLeastVersion(10, 6, 3);
 }
 
 /* static */ bool

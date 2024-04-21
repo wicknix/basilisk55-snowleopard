@@ -125,7 +125,7 @@ private:
   DECL_MEDIA_PREF("media.ffvpx.enabled",                      PDMFFVPXEnabled, bool, true);
 #endif
 #ifdef MOZ_AV1
-  DECL_MEDIA_PREF("media.av1.enabled",                        AV1Enabled, bool, false);
+  DECL_MEDIA_PREF("media.av1.enabled",                        AV1Enabled, bool, true);
 #endif
 #ifdef XP_WIN
   DECL_MEDIA_PREF("media.wmf.enabled",                        PDMWMFEnabled, bool, true);
@@ -162,7 +162,7 @@ private:
   // Ogg
   DECL_MEDIA_PREF("media.ogg.enabled",                        OggEnabled, bool, true);
   // Flac
-  DECL_MEDIA_PREF("media.ogg.flac.enabled",                   FlacInOgg, bool, false);
+  DECL_MEDIA_PREF("media.ogg.flac.enabled",                   FlacInOgg, bool, true);
   DECL_MEDIA_PREF("media.flac.enabled",                       FlacEnabled, bool, true);
 
 public:

@@ -1,7 +1,6 @@
 /* Copyright (c) 1998, 1999, 2000 Thai Open Source Software Center Ltd
    See the file COPYING for copying permission.
 */
-
 #include <stddef.h>
 #include <string.h>                     /* memset(), memcpy() */
 #include <assert.h>
@@ -26,6 +25,8 @@
 #define XmlGetInternalEncoding XmlGetUtf16InternalEncoding
 #define XmlGetInternalEncodingNS XmlGetUtf16InternalEncodingNS
 #define XmlEncode XmlUtf16Encode
+#define INT_MAX 2147483647
+#define UINT_MAX 4294967295U
 
 /* Using pointer subtraction to convert to integer type. */
 #define MUST_CONVERT(enc, s) (!(enc)->isUtf16 || (((char *)(s) - (char *)NULL) & 1))

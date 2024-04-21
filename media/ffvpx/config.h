@@ -5,6 +5,7 @@
 
 #ifndef MOZ_FFVPX_CONFIG_H
 #define MOZ_FFVPX_CONFIG_H
+
 #if defined(XP_WIN)
 // Avoid conflicts with mozilla-config.h
 #if !defined(_MSC_VER)
@@ -38,5 +39,7 @@
 #include "config_unix32.h"
 #endif
 #endif
-#include "config_common.h"
+
+#include "config_override.h"
+
 #endif // MOZ_FFVPX_CONFIG_H

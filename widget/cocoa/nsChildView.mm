@@ -152,6 +152,7 @@ static uint32_t gNumberOfWidgetsNeedingEventThread = 0;
 
 // sets up our view, attaching it to its owning gecko view
 - (id)initWithFrame:(NSRect)inFrame geckoChild:(nsChildView*)inChild;
+- (void)forceRefreshOpenGL;
 
 // set up a gecko mouse event based on a cocoa mouse event
 - (void) convertCocoaMouseWheelEvent:(NSEvent*)aMouseEvent
@@ -425,13 +426,13 @@ nsChildView::Create(nsIWidget* aParent,
   if (!gChildViewMethodsSwizzled) {
     nsToolkit::SwizzleMethods([NSView class], @selector(mouseDownCanMoveWindow),
                               @selector(nsChildView_NSView_mouseDownCanMoveWindow));
-#ifdef __LP64__
-    nsToolkit::SwizzleMethods([NSEvent class], @selector(addLocalMonitorForEventsMatchingMask:handler:),
-                              @selector(nsChildView_NSEvent_addLocalMonitorForEventsMatchingMask:handler:),
-                              true);
-    nsToolkit::SwizzleMethods([NSEvent class], @selector(removeMonitor:),
-                              @selector(nsChildView_NSEvent_removeMonitor:), true);
-#endif
+    if (nsCocoaFeatures::OnLionOrLater()) {
+      nsToolkit::SwizzleMethods([NSEvent class], @selector(addLocalMonitorForEventsMatchingMask:handler:),
+                                @selector(nsChildView_NSEvent_addLocalMonitorForEventsMatchingMask:handler:),
+                                true);
+      nsToolkit::SwizzleMethods([NSEvent class], @selector(removeMonitor:),
+                                @selector(nsChildView_NSEvent_removeMonitor:), true);
+    }
     gChildViewMethodsSwizzled = true;
   }
 
@@ -3191,14 +3192,8 @@ NSEvent* gLastDragMouseDownEvent = nil;
     // Inform the OS about the types of services (from the "Services" menu)
     // that we can handle.
 
-    NSArray* sendTypes =
-      [[NSArray alloc] initWithObjects:NSPasteboardTypeString,
-                                       NSPasteboardTypeHTML,
-                                       nil];
-    NSArray* returnTypes =
-      [[NSArray alloc] initWithObjects:NSPasteboardTypeString,
-                                       NSPasteboardTypeHTML,
-                                       nil];
+    NSArray *sendTypes = [[NSArray alloc] initWithObjects:NSStringPboardType,NSHTMLPboardType,nil];
+    NSArray *returnTypes = [[NSArray alloc] initWithObjects:NSStringPboardType,NSHTMLPboardType,nil];
 
     [NSApp registerServicesMenuSendTypes:sendTypes returnTypes:returnTypes];
 
@@ -3211,17 +3206,16 @@ NSEvent* gLastDragMouseDownEvent = nil;
 
 + (void)registerViewForDraggedTypes:(NSView*)aView
 {
-  [aView registerForDraggedTypes:[NSArray arrayWithObjects:
-                                    NSFilenamesPboardType,
-                                    NSPasteboardTypeString,
-                                    NSPasteboardTypeHTML,
-                                    NSURLPboardType,
-                                    kPasteboardTypeFileURLPromise,
-                                    kWildcardPboardType,
-                                    kCorePboardType_url,
-                                    kCorePboardType_urld,
-                                    kCorePboardType_urln,
-                                    nil]];
+  [aView registerForDraggedTypes:[NSArray arrayWithObjects:NSFilenamesPboardType,
+                                                           NSStringPboardType,
+                                                           NSHTMLPboardType,
+                                                           NSURLPboardType,
+                                                           NSFilesPromisePboardType,
+                                                           kWildcardPboardType,
+                                                           kCorePboardType_url,
+                                                           kCorePboardType_urld,
+                                                           kCorePboardType_urln,
+                                                           nil]];
 }
 
 // initWithFrame:geckoChild:
@@ -3244,13 +3238,17 @@ NSEvent* gLastDragMouseDownEvent = nil;
     mCumulativeMagnification = 0.0;
     mCumulativeRotation = 0.0;
 
+    // We can't call forceRefreshOpenGL here because, in order to work around
+    // the bug, it seems we need to have a draw already happening. Therefore,
+    // we call it in drawRect:inContext:, when we know that a draw is in
+    // progress.
+    mDidForceRefreshOpenGL = nsCocoaFeatures::OnMavericksOrLater(); // ML could conceivably be using 10.6.2 GMA drivers
+
     mNeedsGLUpdate = NO;
 
     [self setFocusRingType:NSFocusRingTypeNone];
 
-#ifdef __LP64__
     mCancelSwipeAnimation = nil;
-#endif
 
     mTopLeftCornerMask = NULL;
   }
@@ -3323,6 +3321,25 @@ NSEvent* gLastDragMouseDownEvent = nil;
 - (void)uninstallTextInputHandler
 {
   mTextInputHandler = nullptr;
+}
+
+// Work around bug 603134.
+// OS X has a bug that causes new OpenGL windows to only paint once or twice,
+// then stop painting altogether. By clearing the drawable from the GL context,
+// and then resetting the view to ourselves, we convince OS X to start updating
+// again.
+// This can cause a flash in new windows - bug 631339 - but it's very hard to
+// fix that while maintaining this workaround.
+- (void)forceRefreshOpenGL
+{
+  NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
+
+  [mGLContext clearDrawable];
+  CGLLockContext((CGLContextObj)[mGLContext CGLContextObj]);
+  [self updateGLContext];
+  CGLUnlockContext((CGLContextObj)[mGLContext CGLContextObj]);
+
+  NS_OBJC_END_TRY_ABORT_BLOCK;
 }
 
 - (bool)preRender:(NSOpenGLContext *)aGLContext
@@ -3810,6 +3827,14 @@ NSEvent* gLastDragMouseDownEvent = nil;
   LayoutDeviceIntRegion region(geckoBounds);
 
   mGeckoChild->PaintWindow(region);
+
+
+  // Force OpenGL to refresh the very first time we draw. This works around a
+  // Mac OS X bug that stops windows updating on OS X when we use OpenGL.
+  if (!mDidForceRefreshOpenGL) {
+    [self performSelector:@selector(forceRefreshOpenGL) withObject:nil afterDelay:0];
+    mDidForceRefreshOpenGL = YES;
+  }
 }
 
 // Called asynchronously after setNeedsDisplay in order to avoid entering the
@@ -4185,6 +4210,15 @@ NSEvent* gLastDragMouseDownEvent = nil;
   if (!anEvent || !mGeckoChild)
     return;
 
+  /*
+   * In OS X 10.7.* (Lion), smart zoom events come through magnifyWithEvent,
+   * instead of smartMagnifyWithEvent. See bug 863841.
+   */
+  if ([ChildView isLionSmartMagnifyEvent: anEvent]) {
+    [self smartMagnifyWithEvent: anEvent];
+    return;
+  }
+
   nsAutoRetainCocoaObject kungFuDeathGrip(self);
 
   float deltaZ = [anEvent deltaZ];
@@ -4349,8 +4383,27 @@ NSEvent* gLastDragMouseDownEvent = nil;
   NS_OBJC_END_TRY_ABORT_BLOCK;
 }
 
++ (BOOL)isLionSmartMagnifyEvent:(NSEvent*)anEvent
+{
+  /*
+   * On Lion, smart zoom events have type NSEventTypeGesture, subtype 0x16,
+   * whereas pinch zoom events have type NSEventTypeMagnify. So, use that to
+   * discriminate between the two. Smart zoom gestures do not call
+   * beginGestureWithEvent or endGestureWithEvent, so mGestureState is not
+   * changed. Documentation couldn't be found for the meaning of the subtype
+   * 0x16, but it will probably never change. See bug 863841.
+   */
+  return nsCocoaFeatures::OnLionOrLater() &&
+         !nsCocoaFeatures::OnMountainLionOrLater() &&
+         [anEvent type] == NSEventTypeGesture &&
+         [anEvent subtype] == 0x16;
+}
+
 - (bool)shouldConsiderStartingSwipeFromEvent:(NSEvent*)anEvent
 {
+  if (!nsCocoaFeatures::OnLionOrLater()) {
+    return false;
+  }
   // This method checks whether the AppleEnableSwipeNavigateWithScrolls global
   // preference is set.  If it isn't, fluid swipe tracking is disabled, and a
   // horizontal two-finger gesture is always a scroll (even in Safari).  This
@@ -5757,29 +5810,33 @@ GetIntegerDeltaForEvent(NSEvent* aEvent)
 }
 
 // NSDraggingSource
-// This is just implemented so we comply with the NSDraggingSource protocol.
-- (NSDragOperation)draggingSession:(NSDraggingSession*)session
-  sourceOperationMaskForDraggingContext:(NSDraggingContext)context
+- (void)draggedImage:(NSImage *)anImage movedTo:(NSPoint)aPoint
 {
-  return UINT_MAX;
+  // Get the drag service if it isn't already cached. The drag service
+  // isn't cached when dragging over a different application.
+  nsCOMPtr<nsIDragService> dragService = mDragService;
+  if (!dragService) {
+    dragService = do_GetService(kDragServiceContractID);
+  }
+
+  if (dragService) {
+    NSPoint pnt = [NSEvent mouseLocation];
+    FlipCocoaScreenCoordinate(pnt);
+
+    LayoutDeviceIntPoint devPoint = mGeckoChild->CocoaPointsToDevPixels(pnt);
+    dragService->DragMoved(devPoint.x, devPoint.y);
+  }
 }
 
 // NSDraggingSource
-- (BOOL)ignoreModifierKeysForDraggingSession:(NSDraggingSession*)session
-{
-  return YES;
-}
+- (void)draggedImage:(NSImage *)anImage endedAt:(NSPoint)aPoint operation:(NSDragOperation)operation
 
-// NSDraggingSource
-- (void)draggingSession:(NSDraggingSession*)aSession
-           endedAtPoint:(NSPoint)aPoint
-              operation:(NSDragOperation)aOperation
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
 
   gDraggedTransferables = nullptr;
 
-  NSEvent* currentEvent = [NSApp currentEvent];
+  NSEvent *currentEvent = [NSApp currentEvent];
   gUserCancelledDrag = ([currentEvent type] == NSKeyDown &&
                         [currentEvent keyCode] == kVK_Escape);
 
@@ -5791,8 +5848,7 @@ GetIntegerDeltaForEvent(NSEvent* aEvent)
   if (mDragService) {
     // set the dragend point from the current mouse location
     nsDragService* dragService = static_cast<nsDragService *>(mDragService);
-    FlipCocoaScreenCoordinate(aPoint);
-    dragService->SetDragEndPoint(gfx::IntPoint::Round(aPoint.x, aPoint.y));
+
 
     NSPoint pnt = [NSEvent mouseLocation];
     FlipCocoaScreenCoordinate(pnt);
@@ -5806,7 +5862,7 @@ GetIntegerDeltaForEvent(NSEvent* aEvent)
     // given OS value, and it's also unclear what's the correct dropEffect
     // value for NSDragOperationGeneric that is passed by other applications.
     // All that said, NSDragOperationNone is still reliable.
-    if (aOperation == NSDragOperationNone) {
+    if (operation == NSDragOperationNone) {
       nsCOMPtr<nsIDOMDataTransfer> dataTransfer;
       dragService->GetDataTransfer(getter_AddRefs(dataTransfer));
       if (dataTransfer)
@@ -5826,171 +5882,13 @@ GetIntegerDeltaForEvent(NSEvent* aEvent)
 }
 
 // NSDraggingSource
-- (void)draggingSession:(NSDraggingSession*)aSession
-           movedToPoint:(NSPoint)aPoint
+// this is just implemented so we comply with the NSDraggingSource informal protocol
+- (NSDragOperation)draggingSourceOperationMaskForLocal:(BOOL)isLocal
 {
-  NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
-
-  // Get the drag service if it isn't already cached. The drag service
-  // isn't cached when dragging over a different application.
-  nsCOMPtr<nsIDragService> dragService = mDragService;
-  if (!dragService) {
-    dragService = do_GetService(kDragServiceContractID);
-  }
-
-  if (dragService) {
-    nsDragService* ds = static_cast<nsDragService *>(dragService.get());
-    ds->DragMovedWithView(aSession, aPoint);
-  }
-
-  NS_OBJC_END_TRY_ABORT_BLOCK;
+  return UINT_MAX;
 }
 
-// NSDraggingSource
-- (void)draggingSession:(NSDraggingSession*)aSession
-       willBeginAtPoint:(NSPoint)aPoint
-{
-  NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
 
-  // there should never be a globalDragPboard when "willBeginAtPoint:" is
-  // called, but just in case we'll take care of it here.
-  [globalDragPboard release];
-
-  // Set the global drag pasteboard that will be used for this drag session.
-  // This will be set back to nil when the drag session ends (mouse exits
-  // the view or a drop happens within the view).
-  globalDragPboard = [[aSession draggingPasteboard] retain];
-
-  NS_OBJC_END_TRY_ABORT_BLOCK;
-}
-
-// NSPasteboardItemDataProvider
-- (void)pasteboard:(NSPasteboard*)aPasteboard
-              item:(NSPasteboardItem*)aItem
-provideDataForType:(NSString*)aType
-{
-  NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
-
-  if (!gDraggedTransferables) {
-    return;
-  }
-
-  uint32_t count = 0;
-  gDraggedTransferables->GetLength(&count);
-
-  for (uint32_t j = 0; j < count; j++) {
-    nsCOMPtr<nsITransferable> currentTransferable =
-      do_QueryElementAt(gDraggedTransferables, j);
-    if (!currentTransferable) {
-      return;
-    }
-
-    // Transform the transferable to an NSDictionary.
-    NSDictionary* pasteboardOutputDict =
-      nsClipboard::PasteboardDictFromTransferable(currentTransferable);
-    if (!pasteboardOutputDict) {
-      return;
-    }
-
-    // Write everything out to the pasteboard.
-    unsigned int typeCount = [pasteboardOutputDict count];
-    NSMutableArray* types = [NSMutableArray arrayWithCapacity:typeCount + 1];
-    [types addObjectsFromArray:[pasteboardOutputDict allKeys]];
-    [types addObject:kWildcardPboardType];
-    for (unsigned int k = 0; k < typeCount; k++) {
-      NSString* curType = [types objectAtIndex:k];
-      if ([curType isEqualToString:NSPasteboardTypeString] ||
-          [curType isEqualToString:kCorePboardType_url] ||
-          [curType isEqualToString:kCorePboardType_urld] ||
-          [curType isEqualToString:kCorePboardType_urln]) {
-        [aPasteboard setString:[pasteboardOutputDict valueForKey:curType]
-                       forType:curType];
-      } else if ([curType isEqualToString:NSPasteboardTypeHTML]) {
-        [aPasteboard setString:
-          (nsClipboard::WrapHtmlForSystemPasteboard(
-            [pasteboardOutputDict valueForKey:curType]))
-                      forType:curType];
-      } else if ([curType isEqualToString:NSPasteboardTypeTIFF] ||
-                 [curType isEqualToString:kCustomTypesPboardType]) {
-        [aPasteboard setData:[pasteboardOutputDict valueForKey:curType]
-                     forType:curType];
-      } else if (
-        [curType isEqualToString:(NSString*)kPasteboardTypeFileURLPromise] ||
-        [curType isEqualToString:NSFilenamesPboardType]) {
-
-        nsCOMPtr<nsIFile> targFile;
-        NS_NewLocalFile(EmptyString(), true, getter_AddRefs(targFile));
-        nsCOMPtr<nsILocalFileMac> macLocalFile = do_QueryInterface(targFile);
-        if (!macLocalFile) {
-          NS_ERROR("No Mac local file");
-          continue;
-        }
-
-        // get paste location from low level pasteboard
-        PasteboardRef pboardRef = NULL;
-        PasteboardCreate((CFStringRef)[aPasteboard name], &pboardRef);
-        if (!pboardRef) {
-          continue;
-        }
-
-        PasteboardSynchronize(pboardRef);
-        CFURLRef urlRef = NULL;
-        PasteboardCopyPasteLocation(pboardRef, &urlRef);
-        if (!urlRef) {
-          CFRelease(pboardRef);
-          continue;
-        }
-
-        if (!NS_SUCCEEDED(macLocalFile->InitWithCFURL(urlRef))) {
-          NS_ERROR("failed InitWithCFURL");
-          CFRelease(urlRef);
-          CFRelease(pboardRef);
-          continue;
-        }
-
-        if (!gDraggedTransferables) {
-          CFRelease(urlRef);
-          CFRelease(pboardRef);
-          continue;
-        }
-
-        uint32_t transferableCount;
-        nsresult rv = gDraggedTransferables->GetLength(&transferableCount);
-        if (NS_FAILED(rv)) {
-          CFRelease(urlRef);
-          CFRelease(pboardRef);
-          continue;
-        }
-
-        for (uint32_t i = 0; i < transferableCount; i++) {
-          nsCOMPtr<nsITransferable> item =
-            do_QueryElementAt(gDraggedTransferables, i);
-          if (!item) {
-            NS_ERROR("no transferable");
-            continue;
-          }
-
-          item->SetTransferData(kFilePromiseDirectoryMime, macLocalFile,
-                                sizeof(nsIFile*));
-
-          // Now request the kFilePromiseMime data, which will invoke the data
-          // provider. If successful, the file will have been created.
-          nsCOMPtr<nsISupports> fileDataPrimitive;
-          uint32_t dataSize = 0;
-          item->GetTransferData(kFilePromiseMime,
-                                getter_AddRefs(fileDataPrimitive), &dataSize);
-        }
-        CFRelease(urlRef);
-        CFRelease(pboardRef);
-
-        [aPasteboard setPropertyList:[pasteboardOutputDict valueForKey:curType]
-                             forType:curType];
-      }
-    }
-  }
-
-  NS_OBJC_END_TRY_ABORT_BLOCK;
-}
 
 #pragma mark -
 
@@ -6014,9 +5912,8 @@ provideDataForType:(NSString*)aType
   // or HTML from us or no data at all AND when the service will either not
   // send back any data to us or will send a string or HTML back to us.
 
-#define IsSupportedType(typeStr) \
-  ([typeStr isEqualToString:NSPasteboardTypeString] || \
-   [typeStr isEqualToString:NSPasteboardTypeHTML])
+#define IsSupportedType(typeStr) ([typeStr isEqual:NSStringPboardType] || [typeStr isEqual:NSHTMLPboardType])
+
 
   id result = nil;
 
@@ -6068,8 +5965,8 @@ provideDataForType:(NSString*)aType
   nsAutoRetainCocoaObject kungFuDeathGrip(self);
 
   // Make sure that the service will accept strings or HTML.
-  if ([types containsObject:NSPasteboardTypeString] == NO &&
-      [types containsObject:NSPasteboardTypeHTML] == NO)
+  if ([types containsObject:NSStringPboardType] == NO &&
+      [types containsObject:NSHTMLPboardType] == NO)
     return NO;
 
   // Bail out if there is no Gecko object.
@@ -6096,18 +5993,16 @@ provideDataForType:(NSString*)aType
     NSString* currentKey = [declaredTypes objectAtIndex:i];
     id currentValue = [pasteboardOutputDict valueForKey:currentKey];
 
-    if ([currentKey isEqualToString:NSPasteboardTypeString] ||
-        [currentKey isEqualToString:kCorePboardType_url] ||
-        [currentKey isEqualToString:kCorePboardType_urld] ||
-        [currentKey isEqualToString:kCorePboardType_urln]) {
+    if (currentKey == NSStringPboardType ||
+        currentKey == kCorePboardType_url ||
+        currentKey == kCorePboardType_urld ||
+        currentKey == kCorePboardType_urln) {
       [pboard setString:currentValue forType:currentKey];
-    } else if ([currentKey isEqualToString:NSPasteboardTypeHTML]) {
-      [pboard setString:(nsClipboard::WrapHtmlForSystemPasteboard(currentValue))
-                forType:currentKey];
-    } else if ([currentKey isEqualToString:NSPasteboardTypeTIFF]) {
+    } else if (currentKey == NSHTMLPboardType) {
+      [pboard setString:(nsClipboard::WrapHtmlForSystemPasteboard(currentValue)) forType:currentKey];
+    } else if (currentKey == NSTIFFPboardType) {
       [pboard setData:currentValue forType:currentKey];
-    } else if ([currentKey isEqualToString:
-                 (NSString*)kPasteboardTypeFileURLPromise]) {
+    } else if (currentKey == NSFilesPromisePboardType) {
       [pboard setPropertyList:currentValue forType:currentKey];
     }
   }
@@ -6631,7 +6526,6 @@ static const CGEventField kCGWindowNumberField = (const CGEventField) 51;
 
 @end
 
-#ifdef __LP64__
 // When using blocks, at least on OS X 10.7, the OS sometimes calls
 // +[NSEvent removeMonitor:] more than once on a single event monitor, which
 // causes crashes.  See bug 678607.  We hook these methods to work around
@@ -6674,4 +6568,3 @@ static NSHashTable *sLocalEventObservers = nil;
 }
 
 @end
-#endif // #ifdef __LP64__
