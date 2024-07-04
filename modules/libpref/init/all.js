@@ -1733,6 +1733,12 @@ pref("network.http.keep_empty_response_headers_as_empty_string", true);
 // Max size, in bytes, for received HTTP response header.
 pref("network.http.max_response_header_size", 393216);
 
+// This sets the nonce length to verify the server response (via a
+// server-returned Authentication-Info header). Also used for session info.
+// Note: Range-checked to 4..256, if OOB defaults to 16.
+// Note: Chrome uses 16. Larger values may break sites. See Bug 1892449.
+pref("network.http.digest_auth_cnonce_length", 16);
+
 // default values for FTP
 // in a DSCP environment this should be 40 (0x28, or AF11), per RFC-4594,
 // Section 4.8 "High-Throughput Data Service Class", and 80 (0x50, or AF22)
@@ -4607,6 +4613,9 @@ pref("canvas.image.cache.limit", 0);
 // Allow track-fobics to deliberately poison canvas data for
 // toDataURL() and getImageData()
 pref("canvas.poisondata", false);
+// Rotate randomness of data poisoning every n seconds. Default 5 minutes.
+// Valid range [1..28800] (1s-8h).
+pref("canvas.poisondata.interval", 300);
 
 // WebGL prefs
 #ifdef ANDROID
@@ -5650,6 +5659,9 @@ pref("media.seekToNextFrame.enabled", true);
 
 // return the maximum number of cores that navigator.hardwareConcurrency returns
 pref("dom.maxHardwareConcurrency", 16);
+
+// Exposes the navigator.webdriver attribute.
+pref("dom.webdriver.enabled", true);
 
 // Shutdown the async osfile worker if it's no longer needed.
 pref("osfile.reset_worker_delay", 30000);
