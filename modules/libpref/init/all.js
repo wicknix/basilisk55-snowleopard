@@ -894,9 +894,6 @@ pref("canvas.filters.enabled", true);
 pref("canvas.path.enabled", true);
 pref("canvas.capturestream.enabled", true);
 
-// Disable the ImageBitmap-extensions for now.
-pref("canvas.imagebitmap_extensions.enabled", false);
-
 // We want the ability to forcibly disable platform a11y, because
 // some non-a11y-related components attempt to bring it up.  See bug
 // 538530 for details about Windows; we have a pref here that allows it
@@ -1703,6 +1700,8 @@ pref("network.http.altsvc.enabled", true);
 pref("network.http.altsvc.oe", false);
 // Send upgrade-insecure-requests HTTP header?
 pref("network.http.upgrade-insecure-requests", false);
+// Send Sec-Fetch-* headers?
+pref("network.http.secfetch.enabled", true);
 
 pref("network.http.diagnostics", false);
 
@@ -2789,6 +2788,9 @@ pref("layout.css.control-characters.visible", true);
 
 // Is support for ResizeObservers enabled?
 pref("layout.css.resizeobserver.enabled", true);
+
+// Is support for cascade layers enabled?
+pref("layout.css.cascade-layers.enabled", true);
 
 // pref for which side vertical scrollbars should be on
 // 0 = end-side in UI direction
