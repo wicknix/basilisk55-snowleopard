@@ -72,6 +72,7 @@ static bool sMozGradientsEnabled;
 static bool sControlCharVisibility;
 static bool sLegacyNegationPseudoClassEnabled;
 static bool sMozDocumentEnabledInContent;
+static bool sCascadeLayersEnabled;
 
 const uint32_t
 nsCSSProps::kParserVariantTable[eCSSProperty_COUNT_no_shorthands] = {
@@ -694,6 +695,7 @@ protected:
   bool ParseMediaQueryExpression(nsMediaQuery* aQuery);
   void ProcessImport(const nsString& aURLSpec,
                      nsMediaList* aMedia,
+                     const nsString& aLayerName,
                      RuleAppendFunc aAppendFunc,
                      void* aProcessData,
                      uint32_t aLineNumber,
@@ -740,6 +742,8 @@ protected:
   bool ParseCounterDescriptorValue(nsCSSCounterDesc aDescID,
                                    nsCSSValue& aValue);
   bool ParseCounterRange(nsCSSValuePair& aPair);
+
+  bool ParseLayerRule(RuleAppendFunc aAppendFunc, void* aProcessData);
 
   /**
    * Parses the current input stream for a CSS token stream value and resolves
@@ -1073,12 +1077,16 @@ protected:
   bool ParseListStyle();
   bool ParseListStyleType(nsCSSValue& aValue);
   bool ParseMargin();
+  bool ParseMarginBlock();
+  bool ParseMarginInline();
   bool ParseClipPath(nsCSSValue& aValue);
   bool ParseTransform(bool aIsPrefixed, bool aDisallowRelativeValues = false);
   bool ParseObjectPosition();
   bool ParseOutline();
   bool ParseOverflow();
   bool ParsePadding();
+  bool ParsePaddingBlock();
+  bool ParsePaddingInline();
   bool ParseQuotes();
   bool ParseTextAlign(nsCSSValue& aValue,
                       const KTableEntry aTable[]);
@@ -1177,6 +1185,10 @@ protected:
   // Reused utility parsing routines
   void AppendValue(nsCSSPropertyID aPropID, const nsCSSValue& aValue);
   bool ParseBoxProperties(const nsCSSPropertyID aPropIDs[]);
+  bool ParseBoxPairProperties(int32_t aSingleVariantMask,
+                              int32_t aPairVariantMask,
+                              nsCSSPropertyID aStart,
+                              nsCSSPropertyID aEnd);
   bool ParseGroupedBoxProperty(int32_t aVariantMask,
                                nsCSSValue& aValue,
                                uint32_t aRestrictions);
@@ -3424,6 +3436,11 @@ CSSParserImpl::ParseAtRule(RuleAppendFunc aAppendFunc,
     parseFunc = &CSSParserImpl::ParseSupportsRule;
     newSection = eCSSSection_General;
 
+  } else if (mToken.mIdent.LowerCaseEqualsLiteral("layer") &&
+             sCascadeLayersEnabled) {
+    parseFunc = &CSSParserImpl::ParseLayerRule;
+    newSection = eCSSSection_General;
+
   } else if (mToken.mIdent.LowerCaseEqualsLiteral("counter-style")) {
     parseFunc = &CSSParserImpl::ParseCounterStyleRule;
     newSection = eCSSSection_General;
@@ -3857,19 +3874,24 @@ CSSParserImpl::ParseImportRule(RuleAppendFunc aAppendFunc, void* aData)
     NS_ASSERTION(media->Length() != 0, "media list must be nonempty");
   }
 
-  ProcessImport(url, media, aAppendFunc, aData, linenum, colnum);
+  // FIXME: Layer functions inside @import declarations are treated as an error.
+  nsAutoString layerName;
+
+  ProcessImport(url, media, layerName, aAppendFunc, aData, linenum, colnum);
   return true;
 }
 
 void
 CSSParserImpl::ProcessImport(const nsString& aURLSpec,
                              nsMediaList* aMedia,
+                             const nsString& aLayerName,
                              RuleAppendFunc aAppendFunc,
                              void* aData,
                              uint32_t aLineNumber,
                              uint32_t aColumnNumber)
 {
   RefPtr<css::ImportRule> rule = new css::ImportRule(aMedia, aURLSpec,
+                                                       aLayerName,
                                                      aLineNumber,
                                                      aColumnNumber);
   (*aAppendFunc)(rule, aData);
@@ -3890,7 +3912,6 @@ CSSParserImpl::ProcessImport(const nsString& aURLSpec,
 
   if (mChildLoader) {
     mChildLoader->LoadChildSheet(mSheet, url, aMedia, rule,
-                                 /* aServoParentRule = */ nullptr,
                                  mReusableSheets);
   }
 }
@@ -4921,6 +4942,113 @@ CSSParserImpl::ParseSupportsConditionTermsAfterOperator(
       return true;
     }
   }
+}
+
+bool
+CSSParserImpl::ParseLayerRule(RuleAppendFunc aAppendFunc, void* aProcessData)
+{
+  nsString layerName;
+  nsTArray<nsString>* nameList = new nsTArray<nsString>();
+
+  uint32_t linenum, colnum;
+  if (!GetNextTokenLocation(true, &linenum, &colnum)) {
+    return false;
+  }
+
+  nsCSSToken* tk = &mToken;
+  if (!GetToken(true)) {
+    return false;
+  }
+
+  // Parse the layer name or name list if we aren't immediately
+  // followed by a "{", which indicates an anonymous layer.
+  bool isStatement = false;
+  if (tk->mType == eCSSToken_Ident) {
+    nsString* currentName = new nsString();
+    currentName->Assign(tk->mIdent);
+
+    bool parsing = true;
+    bool expectIdent = false;
+    while (parsing) {
+      if (!GetToken(true)) {
+        return false;
+      }
+
+      switch (tk->mType) {
+        case eCSSToken_Symbol: {
+          if ('.' == tk->mSymbol) {
+            expectIdent = true;
+            if (!currentName->IsEmpty()) {
+              currentName->Append(tk->mSymbol);
+              continue;
+            }
+            parsing = false;
+            break;
+          } else if (',' == tk->mSymbol) {
+            if (expectIdent) {
+              parsing = false;
+              break;
+            }
+            nameList->AppendElement(*currentName);
+            currentName = new nsString();
+            expectIdent = true;
+            continue;
+          } else if (';' == tk->mSymbol) {
+            if (expectIdent) {
+              parsing = false;
+              break;
+            }
+            nameList->AppendElement(*currentName);
+            currentName = new nsString();
+            isStatement = true;
+            parsing = false;
+            break;
+          } else if ('{' == tk->mSymbol) {
+            if (expectIdent) {
+              parsing = false;
+              break;
+            }
+            nameList->AppendElement(*currentName);
+            uint32_t nameListLength = nameList->Length();
+            if (nameListLength == 0 || nameListLength > 1) {
+              return false;
+            }
+            layerName.Assign(nameList->ElementAt(0));
+            parsing = false;
+            break;
+          }
+        }
+        case eCSSToken_Ident: {
+          expectIdent = false;
+          currentName->Append(tk->mIdent);
+          break;
+        }
+        default: {
+          return false;
+        }
+      }
+    }
+
+    if (expectIdent) {
+      UngetToken();
+      return false;
+    }    
+  } else if (tk->mType == eCSSToken_Symbol && '{' != tk->mSymbol) {
+    UngetToken();
+    return false;
+  }
+
+  if (isStatement) {
+    RefPtr<CSSLayerStatementRule> rule =
+      new CSSLayerStatementRule(*nameList, linenum, colnum);
+    (*aAppendFunc)(rule, aProcessData);
+    return true;
+  }
+
+  UngetToken();
+  RefPtr<css::GroupRule> rule =
+    new CSSLayerBlockRule(layerName, linenum, colnum);
+  return ParseGroupRule(rule, aAppendFunc, aProcessData);
 }
 
 bool
@@ -7768,6 +7896,26 @@ const UnitInfo UnitData[] = {
   { STR_WITH_LEN("vh"), eCSSUnit_ViewportHeight, VARIANT_LENGTH },
   { STR_WITH_LEN("vmin"), eCSSUnit_ViewportMin, VARIANT_LENGTH },
   { STR_WITH_LEN("vmax"), eCSSUnit_ViewportMax, VARIANT_LENGTH },
+  { STR_WITH_LEN("svw"), eCSSUnit_SmallViewportWidth, VARIANT_LENGTH },
+  { STR_WITH_LEN("svh"), eCSSUnit_SmallViewportHeight, VARIANT_LENGTH },
+  { STR_WITH_LEN("svmin"), eCSSUnit_SmallViewportMin, VARIANT_LENGTH },
+  { STR_WITH_LEN("svmax"), eCSSUnit_SmallViewportMax, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvw"), eCSSUnit_LargeViewportWidth, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvh"), eCSSUnit_LargeViewportHeight, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvmin"), eCSSUnit_LargeViewportMin, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvmax"), eCSSUnit_LargeViewportMax, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvw"), eCSSUnit_DynamicViewportWidth, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvh"), eCSSUnit_DynamicViewportHeight, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvmin"), eCSSUnit_DynamicViewportMin, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvmax"), eCSSUnit_DynamicViewportMax, VARIANT_LENGTH },
+  { STR_WITH_LEN("vb"), eCSSUnit_ViewportBlock, VARIANT_LENGTH },
+  { STR_WITH_LEN("vi"), eCSSUnit_ViewportInline, VARIANT_LENGTH },
+  { STR_WITH_LEN("svb"), eCSSUnit_SmallViewportBlock, VARIANT_LENGTH },
+  { STR_WITH_LEN("svi"), eCSSUnit_SmallViewportInline, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvb"), eCSSUnit_LargeViewportBlock, VARIANT_LENGTH },
+  { STR_WITH_LEN("lvi"), eCSSUnit_LargeViewportInline, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvb"), eCSSUnit_DynamicViewportBlock, VARIANT_LENGTH },
+  { STR_WITH_LEN("dvi"), eCSSUnit_DynamicViewportInline, VARIANT_LENGTH },
   { STR_WITH_LEN("pc"), eCSSUnit_Pica, VARIANT_LENGTH },
   { STR_WITH_LEN("q"), eCSSUnit_Quarter, VARIANT_LENGTH },
   { STR_WITH_LEN("deg"), eCSSUnit_Degree, VARIANT_ANGLE },
@@ -7807,10 +7955,30 @@ CSSParserImpl::TranslateDimension(nsCSSValue& aValue,
     }
 
     if (!mViewportUnitsEnabled &&
-        (eCSSUnit_ViewportWidth == units  ||
+        (eCSSUnit_ViewportWidth == units ||
          eCSSUnit_ViewportHeight == units ||
-         eCSSUnit_ViewportMin == units    ||
-         eCSSUnit_ViewportMax == units)) {
+         eCSSUnit_ViewportMin == units ||
+         eCSSUnit_ViewportMax == units ||
+         eCSSUnit_SmallViewportWidth == units ||
+         eCSSUnit_SmallViewportHeight == units ||
+         eCSSUnit_SmallViewportMin == units ||
+         eCSSUnit_SmallViewportMax == units ||
+         eCSSUnit_LargeViewportWidth == units ||
+         eCSSUnit_LargeViewportHeight == units ||
+         eCSSUnit_LargeViewportMin == units ||
+         eCSSUnit_LargeViewportMax == units ||
+         eCSSUnit_DynamicViewportWidth == units ||
+         eCSSUnit_DynamicViewportHeight == units ||
+         eCSSUnit_DynamicViewportMin == units ||
+         eCSSUnit_DynamicViewportMax == units ||
+         eCSSUnit_ViewportBlock == units ||
+         eCSSUnit_ViewportInline == units ||
+         eCSSUnit_SmallViewportInline == units ||
+         eCSSUnit_SmallViewportBlock == units ||
+         eCSSUnit_LargeViewportBlock == units ||
+         eCSSUnit_LargeViewportInline == units ||
+         eCSSUnit_DynamicViewportBlock == units ||
+         eCSSUnit_DynamicViewportInline == units )) {
       // Viewport units aren't allowed right now, probably because we're
       // inside an @page declaration. Fail.
       return false;
@@ -10129,25 +10297,10 @@ CSSParserImpl::ParseGridArea()
 bool
 CSSParserImpl::ParseGap()
 {
-  nsCSSValue first;
-  if (ParseSingleTokenVariant(first, VARIANT_INHERIT, nullptr)) {
-    AppendValue(eCSSProperty_row_gap, first);
-    AppendValue(eCSSProperty_column_gap, first);
-    return true;
-  }
-  if (ParseNonNegativeVariant(first, VARIANT_LPCALC, nullptr) !=
-        CSSParseResult::Ok) {
-    return false;
-  }
-  nsCSSValue second;
-  auto result = ParseNonNegativeVariant(second, VARIANT_LPCALC, nullptr);
-  if (result == CSSParseResult::Error) {
-    return false;
-  }
-  AppendValue(eCSSProperty_row_gap, first);
-  AppendValue(eCSSProperty_column_gap,
-              result == CSSParseResult::NotFound ? first : second);
-  return true;
+  return ParseBoxPairProperties(VARIANT_INHERIT,
+                                VARIANT_LPCALC,
+                                eCSSProperty_row_gap,
+                                eCSSProperty_column_gap);
 }
 
 // normal | [<number> <integer>?]
@@ -11468,6 +11621,33 @@ CSSParserImpl::ParseBoxProperties(const nsCSSPropertyID aPropIDs[])
   return true;
 }
 
+bool
+CSSParserImpl::ParseBoxPairProperties(int32_t aSingleVariantMask,
+                                      int32_t aPairVariantMask,
+                                      nsCSSPropertyID aStart,
+                                      nsCSSPropertyID aEnd)
+{
+  nsCSSValue first;
+  if (ParseSingleTokenVariant(first, aSingleVariantMask, nullptr)) {
+    AppendValue(aStart, first);
+    AppendValue(aEnd, first);
+    return true;
+  }
+  if (ParseNonNegativeVariant(first, aPairVariantMask, nullptr) !=
+        CSSParseResult::Ok) {
+    return false;
+  }
+  nsCSSValue second;
+  auto result = ParseNonNegativeVariant(second, aPairVariantMask, nullptr);
+  if (result == CSSParseResult::Error) {
+    return false;
+  }
+  AppendValue(aStart, first);
+  AppendValue(aEnd,
+              result == CSSParseResult::NotFound ? first : second);
+  return true;
+}
+
 // Similar to ParseBoxProperties, except there is only one property
 // with the result as its value, not four.
 bool
@@ -12065,6 +12245,10 @@ CSSParserImpl::ParsePropertyByFunction(nsCSSPropertyID aPropID)
     return ParseListStyle();
   case eCSSProperty_margin:
     return ParseMargin();
+  case eCSSProperty_margin_block:
+    return ParseMarginBlock();
+  case eCSSProperty_margin_inline:
+    return ParseMarginInline();
   case eCSSProperty_object_position:
     return ParseObjectPosition();
   case eCSSProperty_outline:
@@ -12073,6 +12257,10 @@ CSSParserImpl::ParsePropertyByFunction(nsCSSPropertyID aPropID)
     return ParseOverflow();
   case eCSSProperty_padding:
     return ParsePadding();
+  case eCSSProperty_padding_block:
+    return ParsePaddingBlock();
+  case eCSSProperty_padding_inline:
+    return ParsePaddingInline();
   case eCSSProperty_quotes:
     return ParseQuotes();
   case eCSSProperty_text_decoration:
@@ -15597,6 +15785,24 @@ CSSParserImpl::ParseMargin()
 }
 
 bool
+CSSParserImpl::ParseMarginBlock()
+{
+  return ParseBoxPairProperties(VARIANT_AUTO | VARIANT_INHERIT,
+                                VARIANT_AUTO | VARIANT_LPCALC,
+                                eCSSProperty_margin_block_start,
+                                eCSSProperty_margin_block_end);
+}
+
+bool
+CSSParserImpl::ParseMarginInline()
+{
+  return ParseBoxPairProperties(VARIANT_AUTO | VARIANT_INHERIT,
+                                VARIANT_AUTO | VARIANT_LPCALC,
+                                eCSSProperty_margin_inline_start,
+                                eCSSProperty_margin_inline_end);
+}
+
+bool
 CSSParserImpl::ParseObjectPosition()
 {
   nsCSSValue value;
@@ -15680,6 +15886,24 @@ CSSParserImpl::ParsePadding()
   };
 
   return ParseBoxProperties(kPaddingSideIDs);
+}
+
+bool
+CSSParserImpl::ParsePaddingBlock()
+{
+  return ParseBoxPairProperties(VARIANT_AUTO | VARIANT_INHERIT,
+                                VARIANT_AUTO | VARIANT_LPCALC,
+                                eCSSProperty_padding_block_start,
+                                eCSSProperty_padding_block_end);
+}
+
+bool
+CSSParserImpl::ParsePaddingInline()
+{
+  return ParseBoxPairProperties(VARIANT_AUTO | VARIANT_INHERIT,
+                                VARIANT_AUTO | VARIANT_LPCALC,
+                                eCSSProperty_padding_inline_start,
+                                eCSSProperty_padding_inline_end);
 }
 
 bool
@@ -18170,6 +18394,8 @@ nsCSSParser::Startup()
                                "layout.css.legacy-negation-pseudo.enabled");
   Preferences::AddBoolVarCache(&sMozDocumentEnabledInContent,
                                "layout.css.moz-document.content.enabled");
+  Preferences::AddBoolVarCache(&sCascadeLayersEnabled,
+                               "layout.css.cascade-layers.enabled");
 }
 
 nsCSSParser::nsCSSParser(mozilla::css::Loader* aLoader,

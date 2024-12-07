@@ -730,6 +730,18 @@ Navigator::CpuHasSSE2()
   return mozilla::supports_sse2();
 }
 
+bool
+Navigator::CpuHasAVX()
+{
+  return mozilla::supports_avx();
+}
+
+bool
+Navigator::CpuHasAVX2()
+{
+  return mozilla::supports_avx2();
+}
+
 void
 Navigator::RefreshMIMEArray()
 {
@@ -1902,6 +1914,14 @@ Navigator::Clipboard()
     mClipboard = new dom::Clipboard(GetWindow());
   }
   return mClipboard;
+}
+
+/* static */
+bool
+Navigator::Webdriver()
+{
+  // We don't support Selenium or marionette, so this is always false.
+  return false;
 }
 
 #ifdef MOZ_EME

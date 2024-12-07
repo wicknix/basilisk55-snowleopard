@@ -16,7 +16,6 @@
 #include "mozilla/FloatingPoint.h" // For IsFinite
 #include "mozilla/LookAndFeel.h" // For LookAndFeel::GetInt
 #include "mozilla/KeyframeUtils.h"
-#include "mozilla/ServoBindings.h"
 #include "mozilla/StyleAnimationValue.h"
 #include "Layers.h" // For Layer
 #include "nsComputedDOMStyle.h" // nsComputedDOMStyle::GetStyleContextForElement
@@ -32,17 +31,7 @@ namespace mozilla {
 bool
 PropertyValuePair::operator==(const PropertyValuePair& aOther) const
 {
-  if (mProperty != aOther.mProperty || mValue != aOther.mValue) {
-    return false;
-  }
-  if (mServoDeclarationBlock == aOther.mServoDeclarationBlock) {
-    return true;
-  }
-  if (!mServoDeclarationBlock || !aOther.mServoDeclarationBlock) {
-    return false;
-  }
-  return Servo_DeclarationBlock_Equals(mServoDeclarationBlock,
-                                       aOther.mServoDeclarationBlock);
+  return mProperty == aOther.mProperty && mValue == aOther.mValue;
 }
 
 namespace dom {
@@ -309,10 +298,7 @@ KeyframeEffectReadOnly::UpdateProperties(nsStyleContext* aStyleContext)
       runningOnCompositorProperties.HasProperty(property.mProperty);
   }
 
-  // FIXME (bug 1303235): Do this for Servo too
-  if (aStyleContext->PresContext()->StyleSet()->IsGecko()) {
-    CalculateCumulativeChangeHint(aStyleContext);
-  }
+  CalculateCumulativeChangeHint(aStyleContext);
 
   MarkCascadeNeedsUpdate();
 
@@ -363,7 +349,7 @@ KeyframeEffectReadOnly::ResolveBaseStyle(nsCSSPropertyID aProperty,
   }
 
   RefPtr<nsStyleContext> styleContextWithoutAnimation =
-    aStyleContext->PresContext()->StyleSet()->AsGecko()->
+    aStyleContext->PresContext()->StyleSet()->
       ResolveStyleByRemovingAnimation(mTarget->mElement,
                                       aStyleContext,
                                       eRestyle_AllHintsWithAnimations);
@@ -417,11 +403,6 @@ KeyframeEffectReadOnly::CompositeValue(
     MOZ_ASSERT(!aValueToComposite.IsNull(),
       "Input value should be valid in case of replace composite");
     // Just copy the input value in case of 'Replace'.
-    return result;
-  }
-
-  // FIXME: Bug 1311257: Get the base value for the servo backend.
-  if (mDocument->IsStyledByServo()) {
     return result;
   }
 
@@ -1110,21 +1091,15 @@ KeyframeEffectReadOnly::GetKeyframes(JSContext*& aCx,
     JS::Rooted<JSObject*> keyframeObject(aCx, &keyframeJSValue.toObject());
     for (const PropertyValuePair& propertyValue : keyframe.mPropertyValues) {
       nsAutoString stringValue;
-      if (propertyValue.mServoDeclarationBlock) {
-        Servo_DeclarationBlock_SerializeOneValue(
-          propertyValue.mServoDeclarationBlock,
-          propertyValue.mProperty, &stringValue);
-      } else {
-        // nsCSSValue::AppendToString does not accept shorthands properties but
-        // works with token stream values if we pass eCSSProperty_UNKNOWN as
-        // the property.
-        nsCSSPropertyID propertyForSerializing =
-          nsCSSProps::IsShorthand(propertyValue.mProperty)
-          ? eCSSProperty_UNKNOWN
-          : propertyValue.mProperty;
-        propertyValue.mValue.AppendToString(
-          propertyForSerializing, stringValue, nsCSSValue::eNormalized);
-      }
+      // nsCSSValue::AppendToString does not accept shorthands properties but
+      // works with token stream values if we pass eCSSProperty_UNKNOWN as
+      // the property.
+      nsCSSPropertyID propertyForSerializing =
+        nsCSSProps::IsShorthand(propertyValue.mProperty)
+        ? eCSSProperty_UNKNOWN
+        : propertyValue.mProperty;
+      propertyValue.mValue.AppendToString(
+        propertyForSerializing, stringValue, nsCSSValue::eNormalized);
 
       const char* name = nsCSSProps::PropertyIDLName(propertyValue.mProperty);
       JS::Rooted<JS::Value> value(aCx);
@@ -1486,10 +1461,8 @@ CreateStyleContextForAnimationValue(nsCSSPropertyID aProperty,
   nsCOMArray<nsIStyleRule> rules;
   rules.AppendObject(styleRule);
 
-  MOZ_ASSERT(aBaseStyleContext->PresContext()->StyleSet()->IsGecko(),
-             "ServoStyleSet should not use StyleAnimationValue for animations");
   nsStyleSet* styleSet =
-    aBaseStyleContext->PresContext()->StyleSet()->AsGecko();
+    aBaseStyleContext->PresContext()->StyleSet();
 
   RefPtr<nsStyleContext> styleContext =
     styleSet->ResolveStyleByAddingRules(aBaseStyleContext, rules);
@@ -1571,10 +1544,8 @@ KeyframeEffectReadOnly::CanIgnoreIfNotVisible() const
     return false;
   }
 
-  // FIXME (bug 1303235): We don't calculate mCumulativeChangeHint for
-  // the Servo backend yet
   nsPresContext* presContext = GetPresContext();
-  if (!presContext || presContext->StyleSet()->IsServo()) {
+  if (!presContext) {
     return false;
   }
 

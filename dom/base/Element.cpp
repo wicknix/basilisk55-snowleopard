@@ -57,7 +57,6 @@
 #include "mozilla/AnimationComparator.h"
 #include "mozilla/AsyncEventDispatcher.h"
 #include "mozilla/ContentEvents.h"
-#include "mozilla/DeclarationBlockInlines.h"
 #include "mozilla/EffectSet.h"
 #include "mozilla/EventDispatcher.h"
 #include "mozilla/EventListenerManager.h"
@@ -108,6 +107,7 @@
 #include "nsViewManager.h"
 #include "nsIScrollableFrame.h"
 #include "mozilla/css/StyleRule.h" /* For nsCSSSelectorList */
+#include "mozilla/css/Declaration.h"
 #include "nsCSSRuleProcessor.h"
 #include "nsRuleProcessorData.h"
 #include "nsTextNode.h"
@@ -1455,6 +1455,27 @@ Element::GetElementsByClassName(const nsAString& aClassNames)
   return nsContentUtils::GetElementsByClassName(this, aClassNames);
 }
 
+CSSPseudoElementType
+Element::GetPseudoElementType() const {
+  if (!HasProperties()) {
+    return CSSPseudoElementType::NotPseudo;
+  }
+  nsresult rv = NS_OK;
+  auto raw = GetProperty(nsGkAtoms::pseudoProperty, &rv);
+  if (rv == NS_PROPTABLE_PROP_NOT_THERE) {
+    return CSSPseudoElementType::NotPseudo;
+  }
+  return CSSPseudoElementType(reinterpret_cast<uintptr_t>(raw));
+}
+
+void
+Element::SetPseudoElementType(CSSPseudoElementType aPseudo) {
+  static_assert(sizeof(CSSPseudoElementType) <= sizeof(uintptr_t),
+                "Need to be able to store this in a void*");
+  MOZ_ASSERT(aPseudo != CSSPseudoElementType::NotPseudo);
+  SetProperty(nsGkAtoms::pseudoProperty, reinterpret_cast<void*>(aPseudo));
+}
+
 /**
  * Returns the count of descendants (inclusive of aContent) in
  * the uncomposed document that are explicitly set as editable.
@@ -1585,7 +1606,7 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
                // And clear the lazy frame construction bits.
                NODE_NEEDS_FRAME | NODE_DESCENDANTS_NEED_FRAMES);
     // And the restyle bits
-    UnsetRestyleFlagsIfGecko();
+    UnsetRestyleFlags();
   } else if (IsInShadowTree()) {
     // We're not in a document, but we did get inserted into a shadow tree.
     // Since we won't have any restyle data in the document's restyle trackers,
@@ -1595,7 +1616,7 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
     // inserted into a document.
     UnsetFlags(NODE_FORCE_XBL_BINDINGS |
                NODE_NEEDS_FRAME | NODE_DESCENDANTS_NEED_FRAMES);
-    UnsetRestyleFlagsIfGecko();
+    UnsetRestyleFlags();
   } else {
     // If we're not in the doc and not in a shadow tree,
     // update our subtree pointer.
@@ -1862,16 +1883,6 @@ Element::UnbindFromTree(bool aDeep, bool aNullParent)
 
   ClearInDocument();
 
-  // Computed styled data isn't useful for detached nodes, and we'll need to
-  // recomputed it anyway if we ever insert the nodes back into a document.
-  if (IsStyledByServo()) {
-    ClearServoData();
-  } else {
-#ifdef MOZ_STYLO
-    MOZ_ASSERT(!HasServoData());
-#endif
-  }
-
   // Editable descendant count only counts descendants that
   // are in the uncomposed document.
   ResetEditableDescendantCount();
@@ -1983,7 +1994,7 @@ Element::GetSMILOverrideStyle()
   return slots->mSMILOverrideStyle;
 }
 
-DeclarationBlock*
+css::Declaration*
 Element::GetSMILOverrideStyleDeclaration()
 {
   Element::nsExtendedDOMSlots* slots = GetExistingExtendedDOMSlots();
@@ -1991,7 +2002,7 @@ Element::GetSMILOverrideStyleDeclaration()
 }
 
 nsresult
-Element::SetSMILOverrideStyleDeclaration(DeclarationBlock* aDeclaration,
+Element::SetSMILOverrideStyleDeclaration(css::Declaration* aDeclaration,
                                          bool aNotify)
 {
   Element::nsExtendedDOMSlots* slots = ExtendedDOMSlots();
@@ -2031,7 +2042,7 @@ Element::IsInteractiveHTMLContent(bool aIgnoreTabindex) const
   return false;
 }
 
-DeclarationBlock*
+css::Declaration*
 Element::GetInlineStyleDeclaration() const
 {
   if (!MayHaveStyle()) {
@@ -2047,7 +2058,7 @@ Element::GetInlineStyleDeclaration() const
 }
 
 nsresult
-Element::SetInlineStyleDeclaration(DeclarationBlock* aDeclaration,
+Element::SetInlineStyleDeclaration(css::Declaration* aDeclaration,
                                    const nsAString* aSerialized,
                                    bool aNotify)
 {
@@ -4118,13 +4129,4 @@ Element::SetCustomElementDefinition(CustomElementDefinition* aDefinition)
   MOZ_ASSERT(data);
 
   data->SetCustomElementDefinition(aDefinition);
-}
-
-void
-Element::ClearServoData() {
-#ifdef MOZ_STYLO
-  Servo_Element_ClearData(this);
-#else
-  MOZ_CRASH("Accessing servo node data in non-stylo build");
-#endif
 }

@@ -128,7 +128,6 @@ using namespace mozilla::system;
 #include "TouchManager.h"
 #include "MediaDecoder.h"
 #include "MediaPrefs.h"
-#include "mozilla/ServoBindings.h"
 #include "mozilla/StaticPresData.h"
 #include "mozilla/dom/WebIDLGlobalNameHash.h"
 
@@ -281,8 +280,6 @@ nsLayoutStatics::Initialize()
   ProcessPriorityManager::Init();
 
   nsPermissionManager::ClearOriginDataObserverInit();
-  nsCookieService::AppClearDataObserverInit();
-  nsApplicationCacheService::AppClearDataObserverInit();
 
   HTMLVideoElement::Init();
 
@@ -309,10 +306,6 @@ nsLayoutStatics::Initialize()
 
   mozilla::dom::WebCryptoThreadPool::Initialize();
 
-#ifdef MOZ_STYLO
-  Servo_Initialize();
-#endif
-
 #ifndef MOZ_WIDGET_ANDROID
   // On Android, we instantiate it when constructing AndroidBridge.
   MediaPrefs::GetSingleton();
@@ -326,10 +319,6 @@ nsLayoutStatics::Shutdown()
 {
   // Don't need to shutdown nsWindowMemoryReporter, that will be done by the
   // memory reporter manager.
-
-#ifdef MOZ_STYLO
-  Servo_Shutdown();
-#endif
 
   nsMessageManagerScriptExecutor::Shutdown();
   nsFocusManager::Shutdown();

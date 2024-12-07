@@ -16,7 +16,6 @@
 #include "mozilla/dom/FragmentOrElement.h" // for base class
 #include "nsChangeHint.h"                  // for enum
 #include "mozilla/EventStates.h"           // for member
-#include "mozilla/ServoTypes.h"
 #include "mozilla/dom/DirectionalityUtils.h"
 #include "nsIDOMElement.h"
 #include "nsINodeList.h"
@@ -58,7 +57,9 @@ class nsDocument;
 class nsDOMStringMap;
 
 namespace mozilla {
-class DeclarationBlock;
+namespace css {
+  class Declaration;
+} // namespace css
 namespace dom {
   struct AnimationFilter;
   struct ScrollIntoViewOptions;
@@ -81,27 +82,27 @@ NS_GetContentList(nsINode* aRootNode,
 // Element-specific flags
 enum {
   // Set if the element has a pending style change.
-  ELEMENT_HAS_PENDING_RESTYLE =                 NODE_SHARED_RESTYLE_BIT_1,
+  ELEMENT_HAS_PENDING_RESTYLE =                 ELEMENT_FLAG_BIT(0),
 
   // Set if the element is a potential restyle root (that is, has a style
   // change pending _and_ that style change will attempt to restyle
   // descendants).
-  ELEMENT_IS_POTENTIAL_RESTYLE_ROOT =           NODE_SHARED_RESTYLE_BIT_2,
+  ELEMENT_IS_POTENTIAL_RESTYLE_ROOT =           ELEMENT_FLAG_BIT(1),
 
   // Set if the element has a pending animation-only style change as
   // part of an animation-only style update (where we update styles from
   // animation to the current refresh tick, but leave everything else as
   // it was).
-  ELEMENT_HAS_PENDING_ANIMATION_ONLY_RESTYLE =  ELEMENT_FLAG_BIT(0),
+  ELEMENT_HAS_PENDING_ANIMATION_ONLY_RESTYLE =  ELEMENT_FLAG_BIT(2),
 
   // Set if the element is a potential animation-only restyle root (that
   // is, has an animation-only style change pending _and_ that style
   // change will attempt to restyle descendants).
-  ELEMENT_IS_POTENTIAL_ANIMATION_ONLY_RESTYLE_ROOT = ELEMENT_FLAG_BIT(1),
+  ELEMENT_IS_POTENTIAL_ANIMATION_ONLY_RESTYLE_ROOT = ELEMENT_FLAG_BIT(3),
 
   // Set if this element has a pending restyle with an eRestyle_SomeDescendants
   // restyle hint.
-  ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR = ELEMENT_FLAG_BIT(2),
+  ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR = ELEMENT_FLAG_BIT(4),
 
   // Just the HAS_PENDING bits, for convenience
   ELEMENT_PENDING_RESTYLE_FLAGS =
@@ -119,10 +120,10 @@ enum {
                               ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR,
 
   // Set if this element is marked as 'scrollgrab' (see bug 912666)
-  ELEMENT_HAS_SCROLLGRAB = ELEMENT_FLAG_BIT(3),
+  ELEMENT_HAS_SCROLLGRAB = ELEMENT_FLAG_BIT(5),
 
   // Remaining bits are for subclasses
-  ELEMENT_TYPE_SPECIFIC_BITS_OFFSET = NODE_TYPE_SPECIFIC_BITS_OFFSET + 4
+  ELEMENT_TYPE_SPECIFIC_BITS_OFFSET = NODE_TYPE_SPECIFIC_BITS_OFFSET + 6
 };
 
 #undef ELEMENT_FLAG_BIT
@@ -168,9 +169,6 @@ public:
 
   ~Element()
   {
-#ifdef MOZ_STYLO
-    NS_ASSERTION(!HasServoData(), "expected ServoData to be cleared earlier");
-#endif
   }
 
 #endif // MOZILLA_INTERNAL_API
@@ -296,13 +294,13 @@ public:
   /**
    * Get the inline style declaration, if any, for this element.
    */
-  DeclarationBlock* GetInlineStyleDeclaration() const;
+  css::Declaration* GetInlineStyleDeclaration() const;
 
   /**
    * Set the inline style declaration for this element. This will send
    * an appropriate AttributeChanged notification if aNotify is true.
    */
-  virtual nsresult SetInlineStyleDeclaration(DeclarationBlock* aDeclaration,
+  virtual nsresult SetInlineStyleDeclaration(css::Declaration* aDeclaration,
                                              const nsAString* aSerialized,
                                              bool aNotify);
 
@@ -310,7 +308,7 @@ public:
    * Get the SMIL override style declaration for this element. If the
    * rule hasn't been created, this method simply returns null.
    */
-  virtual DeclarationBlock* GetSMILOverrideStyleDeclaration();
+  virtual css::Declaration* GetSMILOverrideStyleDeclaration();
 
   /**
    * Set the SMIL override style declaration for this element. If
@@ -318,7 +316,7 @@ public:
    * context, so that the style changes will be noticed.
    */
   virtual nsresult SetSMILOverrideStyleDeclaration(
-    DeclarationBlock* aDeclaration, bool aNotify);
+    css::Declaration* aDeclaration, bool aNotify);
 
   /**
    * Returns a new nsISMILAttr that allows the caller to animate the given
@@ -461,40 +459,6 @@ public:
 
   inline Element* GetFlattenedTreeParentElement() const;
   inline Element* GetFlattenedTreeParentElementForStyle() const;
-
-  bool HasDirtyDescendantsForServo() const
-  {
-    MOZ_ASSERT(IsStyledByServo());
-    return HasFlag(NODE_HAS_DIRTY_DESCENDANTS_FOR_SERVO);
-  }
-
-  void SetHasDirtyDescendantsForServo() {
-    MOZ_ASSERT(IsStyledByServo());
-    SetFlags(NODE_HAS_DIRTY_DESCENDANTS_FOR_SERVO);
-  }
-
-  void UnsetHasDirtyDescendantsForServo() {
-    MOZ_ASSERT(IsStyledByServo());
-    UnsetFlags(NODE_HAS_DIRTY_DESCENDANTS_FOR_SERVO);
-  }
-
-  inline bool ShouldTraverseForServo();
-
-  inline void NoteDirtyDescendantsForServo();
-
-#ifdef DEBUG
-  inline bool DirtyDescendantsBitIsPropagatedForServo();
-#endif
-
-  bool HasServoData() {
-#ifdef MOZ_STYLO
-    return !!mServoData.Get();
-#else
-    MOZ_CRASH("Accessing servo node data in non-stylo build");
-#endif
-  }
-
-  void ClearServoData();
 
 protected:
   /**
@@ -871,24 +835,9 @@ public:
   already_AddRefed<nsIHTMLCollection>
     GetElementsByClassName(const nsAString& aClassNames);
 
-  CSSPseudoElementType GetPseudoElementType() const {
-    if (!HasProperties()) {
-      return CSSPseudoElementType::NotPseudo;
-    }
-    nsresult rv = NS_OK;
-    auto raw = GetProperty(nsGkAtoms::pseudoProperty, &rv);
-    if (rv == NS_PROPTABLE_PROP_NOT_THERE) {
-      return CSSPseudoElementType::NotPseudo;
-    }
-    return CSSPseudoElementType(reinterpret_cast<uintptr_t>(raw));
-  }
+  CSSPseudoElementType GetPseudoElementType() const;
 
-  void SetPseudoElementType(CSSPseudoElementType aPseudo) {
-    static_assert(sizeof(CSSPseudoElementType) <= sizeof(uintptr_t),
-                  "Need to be able to store this in a void*");
-    MOZ_ASSERT(aPseudo != CSSPseudoElementType::NotPseudo);
-    SetProperty(nsGkAtoms::pseudoProperty, reinterpret_cast<void*>(aPseudo));
-  }
+  void SetPseudoElementType(CSSPseudoElementType aPseudo);
 
 private:
   /**
@@ -1642,10 +1591,6 @@ private:
 
   // Data members
   EventStates mState;
-#ifdef MOZ_STYLO
-  // Per-node data managed by Servo.
-  mozilla::ServoCell<ServoNodeData*> mServoData;
-#endif
 };
 
 class RemoveFromBindingManagerRunnable : public mozilla::Runnable
@@ -1717,9 +1662,9 @@ inline const mozilla::dom::Element* nsINode::AsElement() const
   return static_cast<const mozilla::dom::Element*>(this);
 }
 
-inline void nsINode::UnsetRestyleFlagsIfGecko()
+inline void nsINode::UnsetRestyleFlags()
 {
-  if (IsElement() && !AsElement()->IsStyledByServo()) {
+  if (IsElement()) {
     UnsetFlags(ELEMENT_ALL_RESTYLE_FLAGS);
   }
 }

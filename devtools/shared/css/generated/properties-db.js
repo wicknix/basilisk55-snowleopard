@@ -2039,10 +2039,10 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
       "content",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -2061,10 +2061,10 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
       "content",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -3108,7 +3108,6 @@ exports.CSS_PROPERTIES = {
       "-moz-crisp-edges",
       "-moz-deck",
       "-moz-element",
-      "-moz-fit-content",
       "-moz-grid",
       "-moz-grid-group",
       "-moz-grid-line",
@@ -3249,6 +3248,7 @@ exports.CSS_PROPERTIES = {
       "extra-expanded",
       "fill",
       "fill-box",
+      "fit-content",
       "fixed",
       "flat",
       "flex",
@@ -5798,10 +5798,10 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
       "content",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -5820,10 +5820,10 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
       "content",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -6594,9 +6594,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -6678,9 +6678,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7028,6 +7028,25 @@ exports.CSS_PROPERTIES = {
       "unset"
     ]
   },
+  "margin-block": {
+    "isInherited": false,
+    "subproperties": [
+      "margin-block-start",
+      "margin-block-end"
+    ],
+    "supports": [
+      6,
+      8
+    ],
+    "values": [
+      "-moz-calc",
+      "auto",
+      "calc",
+      "inherit",
+      "initial",
+      "unset"
+    ]
+  },
   "margin-block-end": {
     "isInherited": false,
     "subproperties": [
@@ -7072,6 +7091,25 @@ exports.CSS_PROPERTIES = {
       8
     ],
     "values": [
+      "auto",
+      "calc",
+      "inherit",
+      "initial",
+      "unset"
+    ]
+  },
+  "margin-inline": {
+    "isInherited": false,
+    "subproperties": [
+      "margin-inline-start",
+      "margin-inline-end"
+    ],
+    "supports": [
+      6,
+      8
+    ],
+    "values": [
+      "-moz-calc",
       "auto",
       "calc",
       "inherit",
@@ -7505,8 +7543,8 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7526,8 +7564,8 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7547,8 +7585,8 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7585,9 +7623,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7606,9 +7644,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7627,9 +7665,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -7993,6 +8031,24 @@ exports.CSS_PROPERTIES = {
       "unset"
     ]
   },
+  "padding-block": {
+    "isInherited": false,
+    "subproperties": [
+      "padding-block-start",
+      "padding-block-end"
+    ],
+    "supports": [
+      6,
+      8
+    ],
+    "values": [
+      "-moz-calc",
+      "calc",
+      "inherit",
+      "initial",
+      "unset"
+    ]
+  },
   "padding-block-end": {
     "isInherited": false,
     "subproperties": [
@@ -8035,6 +8091,24 @@ exports.CSS_PROPERTIES = {
       8
     ],
     "values": [
+      "calc",
+      "inherit",
+      "initial",
+      "unset"
+    ]
+  },
+  "padding-inline": {
+    "isInherited": false,
+    "subproperties": [
+      "padding-inline-start",
+      "padding-inline-end"
+    ],
+    "supports": [
+      6,
+      8
+    ],
+    "values": [
+      "-moz-calc",
       "calc",
       "inherit",
       "initial",
@@ -9353,9 +9427,9 @@ exports.CSS_PROPERTIES = {
     ],
     "values": [
       "-moz-available",
-      "-moz-fit-content",
       "auto",
       "calc",
+      "fit-content",
       "inherit",
       "initial",
       "max-content",
@@ -9468,6 +9542,7 @@ exports.CSS_PROPERTIES = {
 exports.PSEUDO_ELEMENTS = [
   ":after",
   ":before",
+  ":slotted",
   ":backdrop",
   ":first-letter",
   ":first-line",

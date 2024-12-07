@@ -10,8 +10,6 @@
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/RuleNodeCacheConditions.h"
 #include "mozilla/StyleAnimationValue.h"
-#include "mozilla/StyleSetHandle.h"
-#include "mozilla/StyleSetHandleInlines.h"
 #include "mozilla/Tuple.h"
 #include "mozilla/UniquePtr.h"
 #include "nsStyleTransformMatrix.h"
@@ -29,7 +27,6 @@
 #include "mozilla/dom/Element.h"
 #include "mozilla/FloatingPoint.h"
 #include "mozilla/Likely.h"
-#include "mozilla/ServoBindings.h" // RawServoDeclarationBlock
 #include "gfxMatrix.h"
 #include "gfxQuaternion.h"
 #include "nsIDocument.h"
@@ -3494,9 +3491,7 @@ ComputeValuesFromStyleRule(nsCSSPropertyID aProperty,
     return false;
   }
 
-  MOZ_ASSERT(aStyleContext->PresContext()->StyleSet()->IsGecko(),
-             "ServoStyleSet should not use StyleAnimationValue for animations");
-  nsStyleSet* styleSet = aStyleContext->PresContext()->StyleSet()->AsGecko();
+  nsStyleSet* styleSet = aStyleContext->PresContext()->StyleSet();
 
   RefPtr<nsStyleContext> tmpStyleContext;
   if (aIsContextSensitive) {
@@ -3656,46 +3651,6 @@ StyleAnimationValue::ComputeValues(
                                          aTargetElement, aStyleContext,
                                          aSpecifiedValue, aUseSVGMode,
                                          aResult);
-}
-
-/* static */ bool
-StyleAnimationValue::ComputeValues(
-  nsCSSPropertyID aProperty,
-  CSSEnabledState aEnabledState,
-  nsStyleContext* aStyleContext,
-  const RawServoDeclarationBlock& aDeclarations,
-  nsTArray<PropertyStyleAnimationValuePair>& aValues)
-{
-  MOZ_ASSERT(aStyleContext->PresContext()->StyleSet()->IsServo(),
-             "Should be using ServoStyleSet if we have a"
-             " RawServoDeclarationBlock");
-
-  if (!nsCSSProps::IsEnabled(aProperty, aEnabledState)) {
-    return false;
-  }
-
-  const ServoComputedValues* previousStyle =
-    aStyleContext->StyleSource().AsServoComputedValues();
-
-  // FIXME: Servo bindings don't yet represent const-ness so we just
-  // cast it away for now.
-  auto declarations = const_cast<RawServoDeclarationBlock*>(&aDeclarations);
-  RefPtr<ServoComputedValues> computedValues =
-    aStyleContext->PresContext()->StyleSet()->AsServo()->
-      RestyleWithAddedDeclaration(declarations, previousStyle).Consume();
-  if (!computedValues) {
-    return false;
-  }
-
-  RefPtr<nsStyleContext> tmpStyleContext =
-    NS_NewStyleContext(aStyleContext, aStyleContext->PresContext(),
-                       aStyleContext->GetPseudo(),
-                       aStyleContext->GetPseudoType(),
-                       computedValues.forget(),
-                       false /* skipFixup */);
-
-  return ComputeValuesFromStyleContext(aProperty, aEnabledState,
-                                       tmpStyleContext, aValues);
 }
 
 bool
@@ -4800,10 +4755,6 @@ StyleAnimationValue::ExtractComputedValue(nsCSSPropertyID aProperty,
           static_cast<const nsStyleVisibility*>(styleStruct)->mVisible,
           eUnit_Visibility);
         return true;
-      }
-      if (aStyleContext->StyleSource().IsServoComputedValues()) {
-        NS_ERROR("stylo: extracting discretely animated values not supported");
-        return false;
       }
       auto cssValue = MakeUnique<nsCSSValue>(eCSSUnit_Unset);
       aStyleContext->RuleNode()->GetDiscretelyAnimatedCSSValue(aProperty,

@@ -894,9 +894,6 @@ pref("canvas.filters.enabled", true);
 pref("canvas.path.enabled", true);
 pref("canvas.capturestream.enabled", true);
 
-// Disable the ImageBitmap-extensions for now.
-pref("canvas.imagebitmap_extensions.enabled", false);
-
 // We want the ability to forcibly disable platform a11y, because
 // some non-a11y-related components attempt to bring it up.  See bug
 // 538530 for details about Windows; we have a pref here that allows it
@@ -1280,6 +1277,12 @@ pref("dom.cycle_collector.incremental", false);
 pref("content.sink.pending_event_mode", 0);
 #endif
 
+// Is support for CORS enabled?
+pref("content.cors.disable", false);
+
+// Should preflight requests be bypassed when CORS is disabled?
+pref("content.cors.bypass_preflight_request", false);
+
 // Disable popups from plugins by default
 //   0 = openAllowed
 //   1 = openControlled
@@ -1407,6 +1410,9 @@ pref("javascript.options.streams", true);
 // advanced prefs
 pref("advanced.mailftp",                    false);
 pref("image.animation_mode",                "normal");
+
+// Same-origin policy for all URIs.
+pref("security.same_origin_policy.enabled", true);
 
 // Same-origin policy for file URIs, "false" is traditional
 pref("security.fileuri.strict_origin_policy", true);
@@ -1703,6 +1709,8 @@ pref("network.http.altsvc.enabled", true);
 pref("network.http.altsvc.oe", false);
 // Send upgrade-insecure-requests HTTP header?
 pref("network.http.upgrade-insecure-requests", false);
+// Send Sec-Fetch-* headers?
+pref("network.http.secfetch.enabled", true);
 
 pref("network.http.diagnostics", false);
 
@@ -1732,6 +1740,12 @@ pref("network.http.keep_empty_response_headers_as_empty_string", true);
 
 // Max size, in bytes, for received HTTP response header.
 pref("network.http.max_response_header_size", 393216);
+
+// This sets the nonce length to verify the server response (via a
+// server-returned Authentication-Info header). Also used for session info.
+// Note: Range-checked to 4..256, if OOB defaults to 16.
+// Note: Chrome uses 16. Larger values may break sites. See Bug 1892449.
+pref("network.http.digest_auth_cnonce_length", 16);
 
 // default values for FTP
 // in a DSCP environment this should be 40 (0x28, or AF11), per RFC-4594,
@@ -1967,6 +1981,16 @@ pref("network.dns.disablePrefetch", false);
 // This preference controls whether .onion hostnames are
 // rejected before being given to DNS. RFC 7686
 pref("network.dns.blockDotOnion", true);
+
+// This preference controls whether to block access to 0.0.0.0
+// to mitigate local access issues in *NIX network stacks.
+#if defined(XP_WIN)
+// Windows is not affected, so don't block it there.
+// XXX: any other OSes not having this issue?
+pref("network.dns.blockQuad0", false);
+#else
+pref("network.dns.blockQuad0", true);
+#endif
 
 // These domains are treated as localhost equivalent
 pref("network.dns.localDomains", "");
@@ -2783,6 +2807,9 @@ pref("layout.css.control-characters.visible", true);
 
 // Is support for ResizeObservers enabled?
 pref("layout.css.resizeobserver.enabled", true);
+
+// Is support for cascade layers enabled?
+pref("layout.css.cascade-layers.enabled", true);
 
 // pref for which side vertical scrollbars should be on
 // 0 = end-side in UI direction
@@ -4607,6 +4634,9 @@ pref("canvas.image.cache.limit", 0);
 // Allow track-fobics to deliberately poison canvas data for
 // toDataURL() and getImageData()
 pref("canvas.poisondata", false);
+// Rotate randomness of data poisoning every n seconds. Default 5 minutes.
+// Valid range [1..28800] (1s-8h).
+pref("canvas.poisondata.interval", 300);
 
 // WebGL prefs
 #ifdef ANDROID
@@ -5651,6 +5681,9 @@ pref("media.seekToNextFrame.enabled", true);
 // return the maximum number of cores that navigator.hardwareConcurrency returns
 pref("dom.maxHardwareConcurrency", 16);
 
+// Exposes the navigator.webdriver attribute.
+pref("dom.webdriver.enabled", true);
+
 // Shutdown the async osfile worker if it's no longer needed.
 pref("osfile.reset_worker_delay", 30000);
 
@@ -5660,11 +5693,6 @@ pref("dom.webkitBlink.filesystem.enabled", true);
 #endif
 
 pref("media.block-autoplay-until-in-foreground", true);
-
-#ifdef MOZ_STYLO
-// Is the Servo-backed style system enabled?
-pref("layout.css.servo.enabled", true);
-#endif
 
 // HSTS Priming
 // If a request is mixed-content, send an HSTS priming request to attempt to

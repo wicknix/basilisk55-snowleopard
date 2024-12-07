@@ -2,18 +2,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- *
- * This Original Code has been modified by IBM Corporation.
- * Modifications made by IBM described herein are
- * Copyright (c) International Business Machines
- * Corporation, 2000
- *
- * Modifications to Mozilla code or documentation
- * identified per MPL Section 3.3
- *
- * Date         Modified by     Description of modification
- * 03/27/2000   IBM Corp.       Added PR_CALLBACK for Optlink
- *                               use in OS2
  */
 
 #include "nsCOMPtr.h"
@@ -38,7 +26,6 @@
 #include "mozilla/EventListenerManager.h"
 #include "mozilla/EventStateManager.h"
 #include "mozilla/EventStates.h"
-#include "mozilla/DeclarationBlockInlines.h"
 #include "nsFocusManager.h"
 #include "nsHTMLStyleSheet.h"
 #include "nsNameSpaceManager.h"
@@ -54,6 +41,7 @@
 #include "nsIScriptSecurityManager.h"
 #include "nsIServiceManager.h"
 #include "mozilla/css/StyleRule.h"
+#include "mozilla/css/Declaration.h"
 #include "nsIURL.h"
 #include "nsViewManager.h"
 #include "nsIWidget.h"
@@ -348,8 +336,8 @@ nsXULElement::Clone(mozilla::dom::NodeInfo *aNodeInfo, nsINode **aResult) const
 
         // Style rules need to be cloned.
         if (originalValue->Type() == nsAttrValue::eCSSDeclaration) {
-            DeclarationBlock* decl = originalValue->GetCSSDeclarationValue();
-            RefPtr<DeclarationBlock> declClone = decl->Clone();
+            css::Declaration* decl = originalValue->GetCSSDeclarationValue();
+            RefPtr<css::Declaration> declClone = decl->Clone();
 
             nsString stringValue;
             originalValue->ToString(stringValue);
@@ -803,7 +791,7 @@ nsXULElement::BindToTree(nsIDocument* aDocument,
     // can be moved from the document that creates them to another document.
 
     if (!XULElementsRulesInMinimalXULSheet(NodeInfo()->NameAtom())) {
-      auto cache = nsLayoutStylesheetCache::For(doc->GetStyleBackendType());
+      auto cache = nsLayoutStylesheetCache::Get();
       doc->EnsureOnDemandBuiltInUASheet(cache->XULSheet());
       // To keep memory usage down it is important that we try and avoid
       // pulling xul.css into non-XUL documents. That should be very rare, and
@@ -1278,7 +1266,6 @@ nsXULElement::DispatchXULCommand(const EventChainVisitor& aVisitor,
 nsresult
 nsXULElement::GetEventTargetParent(EventChainPreVisitor& aVisitor)
 {
-    aVisitor.mForceContentDispatch = true; //FIXME! Bug 329119
     if (IsEventStoppedFromAnonymousScrollbar(aVisitor.mEvent->mMessage)) {
         // Don't propagate these events from native anonymous scrollbar.
         aVisitor.mCanHandle = true;
@@ -1748,8 +1735,8 @@ nsXULElement::MakeHeavyweight(nsXULPrototypeElement* aPrototype)
 
         // Style rules need to be cloned.
         if (protoattr->mValue.Type() == nsAttrValue::eCSSDeclaration) {
-            DeclarationBlock* decl = protoattr->mValue.GetCSSDeclarationValue();
-            RefPtr<DeclarationBlock> declClone = decl->Clone();
+            css::Declaration* decl = protoattr->mValue.GetCSSDeclarationValue();
+            RefPtr<css::Declaration> declClone = decl->Clone();
 
             nsString stringValue;
             protoattr->mValue.ToString(stringValue);

@@ -27,6 +27,7 @@ class DOMPoint;
 class StringOrUnrestrictedDoubleSequence;
 struct DOMPointInit;
 struct DOMMatrixInit;
+struct DOMMatrix2DInit;
 
 class DOMMatrixReadOnly : public nsWrapperCache
 {
@@ -52,11 +53,22 @@ public:
     mMatrix3D = new gfx::Matrix4x4(aMatrix);
   }
 
+  DOMMatrixReadOnly(nsISupports* aParent, const gfx::Matrix& aMatrix)
+    : mParent(aParent) {
+    mMatrix2D = new gfx::Matrix(aMatrix);
+  }
+
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(DOMMatrixReadOnly)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(DOMMatrixReadOnly)
 
   nsISupports* GetParentObject() const { return mParent; }
   virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto) override;
+
+  static already_AddRefed<DOMMatrixReadOnly>
+  FromMatrix(nsISupports* aParent, const DOMMatrix2DInit& aMatrixInit, ErrorResult& aRv);
+
+  static already_AddRefed<DOMMatrixReadOnly>
+  FromMatrix(nsISupports* aParent, const DOMMatrixInit& aMatrixInit, ErrorResult& aRv);
 
   static already_AddRefed<DOMMatrixReadOnly>
   FromMatrix(const GlobalObject& aGlobal, const DOMMatrixInit& aMatrixInit, ErrorResult& aRv);
@@ -208,6 +220,12 @@ public:
                                              ErrorResult& aRv) const;
   void                        Stringify(nsAString& aResult);
   bool                        WriteStructuredClone(JSStructuredCloneWriter* aWriter) const;
+  const gfx::Matrix* GetInternal2D() const {
+    if (Is2D()) {
+      return mMatrix2D;
+    }
+    return nullptr;
+  }
 
 protected:
   nsCOMPtr<nsISupports>     mParent;
@@ -221,7 +239,8 @@ protected:
    * where all of its members are properly defined.
    * The init dictionary's dimension must match the matrix one.
    */
-  void SetDataFromMatrixInit(DOMMatrixInit& aMatrixInit);
+  void SetDataFromMatrix2DInit(const DOMMatrix2DInit& aMatrixInit);
+  void SetDataFromMatrixInit(const DOMMatrixInit& aMatrixInit);
 
   DOMMatrixReadOnly* SetMatrixValue(const nsAString& aTransformList, ErrorResult& aRv);
   void Ensure3DMatrix();
@@ -252,6 +271,10 @@ public:
   {}
 
   DOMMatrix(nsISupports* aParent, const gfx::Matrix4x4& aMatrix)
+    : DOMMatrixReadOnly(aParent, aMatrix)
+  {}
+
+  DOMMatrix(nsISupports* aParent, const gfx::Matrix& aMatrix)
     : DOMMatrixReadOnly(aParent, aMatrix)
   {}
 

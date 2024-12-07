@@ -3042,6 +3042,7 @@ nsLocalFile::IsExecutable(bool* aResult)
       "jar",         // java application bundle
       "js",
       "jse",
+      "library-ms",  // Windows library files shell extension
       "lnk",
       "mad",         // Access Module Shortcut
       "maf",         // Access
@@ -3095,7 +3096,8 @@ nsLocalFile::IsExecutable(bool* aResult)
       "wsc",
       "wsf",
       "wsh",
-      "xll"          // MS Excel dynamic link library
+      "xll",         // MS Excel dynamic link library
+      "xrm-ms"
     };
     nsDependentSubstring ext = Substring(path, dotIdx + 1);
     for (size_t i = 0; i < ArrayLength(executableExts); ++i) {

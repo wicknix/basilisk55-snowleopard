@@ -35,8 +35,8 @@
 #include "mozilla/CORSMode.h"
 #include "mozilla/dom/DocumentOrShadowRoot.h"
 #include "mozilla/dom/Dispatcher.h"
+#include "mozilla/FunctionRef.h"
 #include "mozilla/LinkedList.h"
-#include "mozilla/StyleBackendType.h"
 #include "mozilla/StyleSheet.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/UniquePtr.h"
@@ -100,7 +100,10 @@ class nsWindowSizes;
 class nsDOMCaretPosition;
 class nsViewportInfo;
 class nsIGlobalObject;
+class nsStyleSet;
 struct nsCSSSelectorList;
+
+using mozilla::FunctionRef;
 
 namespace mozilla {
 class AbstractThread;
@@ -108,7 +111,6 @@ class CSSStyleSheet;
 class ErrorResult;
 class EventStates;
 class PendingAnimationTracker;
-class StyleSetHandle;
 class SVGAttrAnimationRuleProcessor;
 template<typename> class OwningNonNull;
 
@@ -832,7 +834,7 @@ public:
   virtual already_AddRefed<nsIPresShell> CreateShell(
       nsPresContext* aContext,
       nsViewManager* aViewManager,
-      mozilla::StyleSetHandle aStyleSet) = 0;
+      nsStyleSet* aStyleSet) = 0;
   virtual void DeleteShell() = 0;
 
   nsIPresShell* GetShell() const
@@ -1198,20 +1200,6 @@ public:
     return mCSSLoader;
   }
 
-  mozilla::StyleBackendType GetStyleBackendType() const {
-    if (mStyleBackendType == mozilla::StyleBackendType(0)) {
-      const_cast<nsIDocument*>(this)->UpdateStyleBackendType();
-    }
-    MOZ_ASSERT(mStyleBackendType != mozilla::StyleBackendType(0));
-    return mStyleBackendType;
-  }
-
-  void UpdateStyleBackendType();
-
-  bool IsStyledByServo() const {
-    return GetStyleBackendType() == mozilla::StyleBackendType::Servo;
-  }
-
   /**
    * Get this document's StyleImageLoader.  This is guaranteed to not return null.
    */
@@ -1338,9 +1326,9 @@ public:
   virtual void RemoveFromNameTable(Element* aElement, nsIAtom* aName) = 0;
 
   /**
-   * Returns all elements in the fullscreen stack in the insertion order.
+   * Returns all elements in the top layer in the insertion order.
    */
-  virtual nsTArray<Element*> GetFullscreenStack() const = 0;
+  virtual nsTArray<Element*> GetTopLayer() const = 0;
 
   /**
    * Asynchronously requests that the document make aElement the fullscreen
@@ -1396,12 +1384,26 @@ public:
    */
   virtual nsIDocument* GetFullscreenRoot() = 0;
 
+  virtual size_t CountFullscreenElements() const = 0;
+
   /**
    * Sets the fullscreen root to aRoot. This stores a weak reference to aRoot
    * in this document.
    */
   virtual void SetFullscreenRoot(nsIDocument* aRoot) = 0;
+  
+  /**
+   * Push elements to and pop elements from the top layer.
+   * Currently in use for fullscreen and modal version of <dialog>.
+   */
+  virtual bool TopLayerPush(Element* aElement) = 0;
+  virtual Element* TopLayerPop(FunctionRef<bool(Element*)> aPredicateFunc) = 0;
 
+  /**
+   * Cancel the dialog element if the document is blocked by the dialog.
+   */
+  virtual void TryCancelDialog() = 0;
+  
   /**
    * Synchronously cleans up the fullscreen state on the given document.
    *
@@ -2675,7 +2677,8 @@ public:
   nsIURI* GetDocumentURIObject() const;
   // Not const because all the full-screen goop is not const
   virtual bool FullscreenEnabled(mozilla::dom::CallerType aCallerType) = 0;
-  virtual Element* FullScreenStackTop() = 0;
+  virtual Element* GetTopLayerTop() = 0;
+  virtual Element* GetUnretargetedFullScreenElement() = 0;
   bool Fullscreen()
   {
     return !!GetFullscreenElement();
@@ -3255,10 +3258,6 @@ protected:
 
   // Our readyState
   ReadyState mReadyState;
-
-  // Whether this document has (or will have, once we have a pres shell) a
-  // Gecko- or Servo-backed style system.
-  mozilla::StyleBackendType mStyleBackendType;
 
 #ifdef MOZILLA_INTERNAL_API
   // Our visibility state

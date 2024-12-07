@@ -36,8 +36,7 @@
 #include "nsHTMLParts.h"
 #include "nsIPresShell.h"
 #include "nsUnicharUtils.h"
-#include "mozilla/StyleSetHandle.h"
-#include "mozilla/StyleSetHandleInlines.h"
+#include "nsStyleSet.h"
 #include "nsViewManager.h"
 #include "nsStyleConsts.h"
 #ifdef MOZ_XUL
@@ -85,8 +84,7 @@
 #include "nsAutoLayoutPhase.h"
 #include "nsStyleStructInlines.h"
 #include "nsPageContentFrame.h"
-#include "mozilla/RestyleManagerHandle.h"
-#include "mozilla/RestyleManagerHandleInlines.h"
+#include "mozilla/RestyleManager.h"
 #include "StickyScrollContainer.h"
 #include "nsFieldSetFrame.h"
 #include "nsInlineFrame.h"
@@ -460,7 +458,7 @@ AnyKidsNeedBlockParent(nsIFrame *aFrameList)
 
 // Reparent a frame into a wrapper frame that is a child of its old parent.
 static void
-ReparentFrame(RestyleManagerHandle aRestyleManager,
+ReparentFrame(RestyleManager* aRestyleManager,
               nsContainerFrame* aNewParentFrame,
               nsIFrame* aFrame)
 {
@@ -473,7 +471,7 @@ ReparentFrames(nsCSSFrameConstructor* aFrameConstructor,
                nsContainerFrame* aNewParentFrame,
                const nsFrameList& aFrameList)
 {
-  RestyleManagerHandle restyleManager = aFrameConstructor->RestyleManager();
+  RestyleManager* restyleManager = aFrameConstructor->RestyleManager();
   for (nsFrameList::Enumerator e(aFrameList); !e.AtEnd(); e.Next()) {
     ReparentFrame(restyleManager, aNewParentFrame, e.get());
   }
@@ -1834,7 +1832,7 @@ nsCSSFrameConstructor::CreateGeneratedContentItem(nsFrameConstructorState& aStat
 
   MOZ_ASSERT(aParentContent->IsElement());
 
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
 
   // Probe for the existence of the pseudo-element
   RefPtr<nsStyleContext> pseudoStyleContext;
@@ -1881,12 +1879,9 @@ nsCSSFrameConstructor::CreateGeneratedContentItem(nsFrameConstructorState& aStat
     return;
   }
 
-  // stylo: ServoRestyleManager does not handle transitions yet, and when it
-  // does it probably won't need to track reframed style contexts to start
-  // transitions correctly.
-  if (mozilla::RestyleManager* geckoRM = RestyleManager()->GetAsGecko()) {
+  if (mozilla::RestyleManager* restyleManager = RestyleManager()) {
     RestyleManager::ReframingStyleContexts* rsc =
-      geckoRM->GetReframingStyleContexts();
+      restyleManager->GetReframingStyleContexts();
     if (rsc) {
       nsStyleContext* oldStyleContext = rsc->Get(container, aPseudoElement);
       if (oldStyleContext) {
@@ -2439,7 +2434,7 @@ nsCSSFrameConstructor::ConstructDocElementFrame(Element*                 aDocEle
   // this document.  Unlike in AddFrameConstructionItems, it's safe to
   // unset all element restyle flags, since we don't have any
   // siblings.
-  aDocElement->UnsetRestyleFlagsIfGecko();
+  aDocElement->UnsetRestyleFlags();
 
   // --------- CREATE AREA OR BOX FRAME -------
   // FIXME: Should this use ResolveStyleContext?  (The calls in this
@@ -2447,8 +2442,7 @@ nsCSSFrameConstructor::ConstructDocElementFrame(Element*                 aDocEle
   // do so for the construction of a style context for an element.)
   RefPtr<nsStyleContext> styleContext;
   styleContext = mPresShell->StyleSet()->ResolveStyleFor(aDocElement,
-                                                         nullptr,
-                                                         LazyComputeBehavior::Allow);
+                                                         nullptr);
 
   const nsStyleDisplay* display = styleContext->StyleDisplay();
 
@@ -2483,16 +2477,9 @@ nsCSSFrameConstructor::ConstructDocElementFrame(Element*                 aDocEle
       // don't do so for the construction of a style context for an
       // element.)
       styleContext = mPresShell->StyleSet()->ResolveStyleFor(aDocElement,
-                                                             nullptr,
-                                                             LazyComputeBehavior::Allow);
+                                                             nullptr);
       display = styleContext->StyleDisplay();
     }
-  }
-
-  // We delay traversing the entire document until here, since we per above we
-  // may invalidate the root style when we load doc stylesheets.
-  if (ServoStyleSet* set = mPresShell->StyleSet()->GetAsServo()) {
-    set->StyleDocument();
   }
 
   // --------- IF SCROLLABLE WRAP IN SCROLLFRAME --------
@@ -2699,17 +2686,11 @@ nsCSSFrameConstructor::ConstructRootFrame()
 {
   AUTO_LAYOUT_PHASE_ENTRY_POINT(mPresShell->GetPresContext(), FrameC);
 
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
 
   // Set up our style rule observer.
   // XXXbz wouldn't this make more sense as part of presshell init?
-  if (styleSet->IsGecko()) {
-    // XXXheycam We don't support XBL bindings providing style to
-    // ServoStyleSets yet.
-    styleSet->AsGecko()->SetBindingManager(mDocument->BindingManager());
-  } else {
-    NS_WARNING("stylo: cannot get ServoStyleSheets from XBL bindings yet. See bug 1290276.");
-  }
+  styleSet->SetBindingManager(mDocument->BindingManager());
 
   // --------- BUILD VIEWPORT -----------
   RefPtr<nsStyleContext> viewportPseudoStyle =
@@ -2874,7 +2855,7 @@ nsCSSFrameConstructor::SetUpDocElementContainingBlock(nsIContent* aDocElement)
   // Start off with the viewport as parent; we'll adjust it as needed.
   nsContainerFrame* parentFrame = viewportFrame;
 
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
   // If paginated, make sure we don't put scrollbars in
   if (!isScrollable) {
     rootPseudoStyle = styleSet->ResolveAnonymousBoxStyle(rootPseudo,
@@ -2974,7 +2955,7 @@ nsCSSFrameConstructor::ConstructPageFrame(nsIPresShell*  aPresShell,
                                           nsContainerFrame*& aCanvasFrame)
 {
   nsStyleContext* parentStyleContext = aParentFrame->StyleContext();
-  StyleSetHandle styleSet = aPresShell->StyleSet();
+  nsStyleSet* styleSet = aPresShell->StyleSet();
 
   RefPtr<nsStyleContext> pagePseudoStyle;
   pagePseudoStyle = styleSet->ResolveAnonymousBoxStyle(nsCSSAnonBoxes::page,
@@ -4253,15 +4234,6 @@ nsCSSFrameConstructor::GetAnonymousContent(nsIContent* aParent,
     }
   }
 
-  if (ServoStyleSet* styleSet = mPresShell->StyleSet()->GetAsServo()) {
-    // Eagerly compute styles for the anonymous content tree.
-    for (auto& info : aContent) {
-      if (info.mContent->IsElement()) {
-        styleSet->StyleNewSubtree(info.mContent->AsElement());
-      }
-    }
-  }
-
   return NS_OK;
 }
 
@@ -4585,7 +4557,7 @@ nsCSSFrameConstructor::BeginBuildingScrollFrame(nsFrameConstructorState& aState,
   aNewFrame = gfxScrollFrame;
 
   // we used the style that was passed in. So resolve another one.
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
   RefPtr<nsStyleContext> scrolledChildStyle =
     styleSet->ResolveAnonymousBoxStyle(aScrolledPseudo, contentStyle);
 
@@ -5039,7 +5011,7 @@ nsCSSFrameConstructor::ResolveStyleContext(nsStyleContext* aParentStyleContext,
                                            nsFrameConstructorState* aState,
                                            Element* aOriginatingElementOrNull)
 {
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
   aContent->OwnerDoc()->FlushPendingLinkUpdates();
 
   RefPtr<nsStyleContext> result;
@@ -5050,12 +5022,10 @@ nsCSSFrameConstructor::ResolveStyleContext(nsStyleContext* aParentStyleContext,
       if (aState) {
         result = styleSet->ResolveStyleFor(aContent->AsElement(),
                                            aParentStyleContext,
-                                           LazyComputeBehavior::Assert,
                                            aState->mTreeMatchContext);
       } else {
         result = styleSet->ResolveStyleFor(aContent->AsElement(),
-                                           aParentStyleContext,
-                                           LazyComputeBehavior::Assert);
+                                           aParentStyleContext);
       }
     } else {
       MOZ_ASSERT(aContent->IsInNativeAnonymousSubtree());
@@ -5084,12 +5054,9 @@ nsCSSFrameConstructor::ResolveStyleContext(nsStyleContext* aParentStyleContext,
     result = styleSet->ResolveStyleForText(aContent, aParentStyleContext);
   }
 
-  // ServoRestyleManager does not handle transitions yet, and when it does
-  // it probably won't need to track reframed style contexts to start
-  // transitions correctly.
-  if (mozilla::RestyleManager* geckoRM = RestyleManager()->GetAsGecko()) {
+  if (mozilla::RestyleManager* restyleManager = RestyleManager()) {
     RestyleManager::ReframingStyleContexts* rsc =
-      geckoRM->GetReframingStyleContexts();
+      restyleManager->GetReframingStyleContexts();
     if (rsc) {
       nsStyleContext* oldStyleContext =
         rsc->Get(aContent, CSSPseudoElementType::NotPseudo);
@@ -5126,7 +5093,7 @@ nsCSSFrameConstructor::FlushAccumulatedBlock(nsFrameConstructorState& aState,
   nsStyleContext* parentContext =
     nsFrame::CorrectStyleParentFrame(aParentFrame,
                                      anonPseudo)->StyleContext();
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
   RefPtr<nsStyleContext> blockContext;
   blockContext = styleSet->
     ResolveAnonymousBoxStyle(anonPseudo, parentContext);
@@ -5609,7 +5576,7 @@ nsCSSFrameConstructor::ShouldCreateItemsForChild(nsFrameConstructorState& aState
                                                  nsContainerFrame* aParentFrame)
 {
   aContent->UnsetFlags(NODE_DESCENDANTS_NEED_FRAMES | NODE_NEEDS_FRAME);
-  if (aContent->IsElement() && !aContent->IsStyledByServo()) {
+  if (aContent->IsElement()) {
     // We can't just remove our pending restyle flags, since we may
     // have restyle-later-siblings set on us.  But we _can_ remove the
     // "is possible restyle root" flags, and need to.  Otherwise we can
@@ -5761,11 +5728,6 @@ nsCSSFrameConstructor::AddFrameConstructionItemsInternal(nsFrameConstructorState
       pendingBinding = newPendingBinding;
       // aState takes over owning newPendingBinding
       aState.AddPendingBinding(newPendingBinding.forget());
-    }
-
-    if (aContent->IsStyledByServo()) {
-      NS_WARNING("stylo: Skipping Unsupported binding re-resolve. This needs fixing.");
-      resolveStyle = false;
     }
 
     if (resolveStyle) {
@@ -7298,37 +7260,15 @@ nsCSSFrameConstructor::ContentAppended(nsIContent*       aContainer,
   }
 #endif // MOZ_XUL
 
-  // The frame constructor uses this codepath both for bonafide newly-added
-  // content and for RestyleManager-driven frame construction (RECONSTRUCT_FRAME
-  // and lazy frame construction). If we're using the Servo style system, we
-  // want to ensure that styles get resolved in the first case, whereas for the
-  // second case they should have already been resolved if needed.
-  bool isNewlyAddedContentForServo = aContainer->IsStyledByServo() &&
-                                     !RestyleManager()->AsBase()->IsInStyleRefresh();
-
   // See comment in ContentRangeInserted for why this is necessary.
   if (!GetContentInsertionFrameFor(aContainer) &&
       !aContainer->IsActiveChildrenElement()) {
-    // We're punting on frame construction because there's no container frame.
-    // The Servo-backed style system handles this case like the lazy frame
-    // construction case.
-    if (isNewlyAddedContentForServo) {
-      aContainer->AsElement()->NoteDirtyDescendantsForServo();
-    }
     return;
   }
 
   if (aAllowLazyConstruction &&
       MaybeConstructLazily(CONTENTAPPEND, aContainer, aFirstNewContent)) {
-    if (isNewlyAddedContentForServo) {
-      aContainer->AsElement()->NoteDirtyDescendantsForServo();
-    }
     return;
-  }
-
-  // We couldn't construct lazily. Make Servo eagerly traverse the subtree.
-  if (isNewlyAddedContentForServo) {
-    mPresShell->StyleSet()->AsServo()->StyleNewChildren(aContainer->AsElement());
   }
 
   LAYOUT_PHASE_TEMP_EXIT();
@@ -7798,15 +7738,6 @@ nsCSSFrameConstructor::ContentRangeInserted(nsIContent*            aContainer,
     return;
   }
 
-  // The frame constructor uses this codepath both for bonafide newly-added
-  // content and for RestyleManager-driven frame construction (RECONSTRUCT_FRAME
-  // and lazy frame construction). If we're using the Servo style system, we
-  // want to ensure that styles get resolved in the first case, whereas for the
-  // second case they should have already been resolved if needed.
-  bool isNewlyAddedContentForServo = aContainer->IsStyledByServo() &&
-                                     !RestyleManager()->AsBase()->IsInStyleRefresh();
-
-
   // Put 'parentFrame' inside a scope so we don't confuse it with
   // 'insertion.mParentFrame' later.
   {
@@ -7817,11 +7748,6 @@ nsCSSFrameConstructor::ContentRangeInserted(nsIContent*            aContainer,
     if (!parentFrame &&
         !(aContainer->IsActiveChildrenElement() || ShadowRoot::FromNode(aContainer))) {
       // We're punting on frame construction because there's no container frame.
-      // The Servo-backed style system handles this case like the lazy frame
-      // construction case.
-      if (isNewlyAddedContentForServo) {
-        aContainer->AsElement()->NoteDirtyDescendantsForServo();
-      }
       return;
     }
 
@@ -7833,16 +7759,8 @@ nsCSSFrameConstructor::ContentRangeInserted(nsIContent*            aContainer,
 
     if (aAllowLazyConstruction &&
         MaybeConstructLazily(CONTENTINSERT, aContainer, aStartChild)) {
-      if (isNewlyAddedContentForServo) {
-        aContainer->AsElement()->NoteDirtyDescendantsForServo();
-      }
       return;
     }
-  }
-
-  // We couldn't construct lazily. Make Servo eagerly traverse the subtree.
-  if (isNewlyAddedContentForServo) {
-    mPresShell->StyleSet()->AsServo()->StyleNewChildren(aContainer->AsElement());
   }
 
   InsertionPoint insertion;
@@ -9228,8 +9146,7 @@ nsCSSFrameConstructor::MaybeRecreateFramesForElement(Element* aElement)
 
   // The parent has a frame, so try resolving a new context.
   RefPtr<nsStyleContext> newContext = mPresShell->StyleSet()->
-    ResolveStyleFor(aElement, oldContext->GetParent(),
-                    LazyComputeBehavior::Assert);
+    ResolveStyleFor(aElement, oldContext->GetParent());
 
   if (oldDisplay == StyleDisplay::None) {
     ChangeUndisplayedContent(aElement, newContext);
@@ -10582,14 +10499,12 @@ nsCSSFrameConstructor::AddFCItemsForAnonymousContent(
 {
   for (uint32_t i = 0; i < aAnonymousItems.Length(); ++i) {
     nsIContent* content = aAnonymousItems[i].mContent;
-    // Gecko-styled nodes should have no pending restyle flags.
-    MOZ_ASSERT_IF(!content->IsStyledByServo(),
-                  !content->IsElement() ||
-                  !(content->GetFlags() & ELEMENT_ALL_RESTYLE_FLAGS));
     // Assert some things about this content
     MOZ_ASSERT(!(content->GetFlags() &
                  (NODE_DESCENDANTS_NEED_FRAMES | NODE_NEEDS_FRAME)),
                "Should not be marked as needing frames");
+    MOZ_ASSERT(!content->IsElement() ||
+               !(content->GetFlags() & ELEMENT_ALL_RESTYLE_FLAGS));
     MOZ_ASSERT(!content->GetPrimaryFrame(),
                "Should have no existing frame");
     MOZ_ASSERT(!content->IsNodeOfType(nsINode::eCOMMENT) &&
@@ -10599,11 +10514,6 @@ nsCSSFrameConstructor::AddFCItemsForAnonymousContent(
     RefPtr<nsStyleContext> styleContext;
     TreeMatchContext::AutoParentDisplayBasedStyleFixupSkipper
       parentDisplayBasedStyleFixupSkipper(aState.mTreeMatchContext);
-
-    // Make sure we eagerly performed the servo cascade when the anonymous
-    // nodes were created.
-    MOZ_ASSERT_IF(content->IsStyledByServo() && content->IsElement(),
-                  content->AsElement()->HasServoData());
 
     // Determine whether this NAC is pseudo-implementing.
     nsIAtom* pseudo = nullptr;
@@ -10836,7 +10746,7 @@ nsCSSFrameConstructor::ProcessChildren(nsFrameConstructorState& aState,
 
       // Frame construction item construction should not post
       // restyles, so removing restyle flags here is safe.
-      child->UnsetRestyleFlagsIfGecko();
+      child->UnsetRestyleFlags();
       if (addChildItems) {
         AddFrameConstructionItems(aState, child, iter.XBLInvolved(), insertion,
                                   itemsToConstruct);
@@ -11119,7 +11029,7 @@ nsCSSFrameConstructor::CreateFloatingLetterFrame(
   // get a proper style context for it (the one passed in is for the
   // letter frame and will have the float property set on it; the text
   // frame shouldn't have that set).
-  StyleSetHandle styleSet = mPresShell->StyleSet();
+  nsStyleSet* styleSet = mPresShell->StyleSet();
   RefPtr<nsStyleContext> textSC = styleSet->
     ResolveStyleForText(aTextContent, aStyleContext);
   aTextFrame->SetStyleContextWithoutNotification(textSC);
@@ -11998,7 +11908,7 @@ nsCSSFrameConstructor::BuildInlineChildItems(nsFrameConstructorState& aState,
       // restyle root" flags in AddFrameConstructionItems.  But note
       // that we can remove all restyle flags, just like in
       // ProcessChildren and for the same reason.
-      content->UnsetRestyleFlagsIfGecko();
+      content->UnsetRestyleFlags();
 
       RefPtr<nsStyleContext> childContext =
         ResolveStyleContext(parentStyleContext, content, &aState);

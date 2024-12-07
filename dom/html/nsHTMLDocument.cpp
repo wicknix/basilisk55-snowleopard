@@ -29,6 +29,7 @@
 #include "nsPIDOMWindow.h"
 #include "nsDOMString.h"
 #include "nsIStreamListener.h"
+#include "nsIProtocolHandler.h"
 #include "nsIURI.h"
 #include "nsIIOService.h"
 #include "nsNetUtil.h"
@@ -2381,7 +2382,7 @@ nsHTMLDocument::TearingDownEditor(nsIEditor *aEditor)
     nsTArray<RefPtr<StyleSheet>> agentSheets;
     presShell->GetAgentStyleSheets(agentSheets);
 
-    auto cache = nsLayoutStylesheetCache::For(GetStyleBackendType());
+    auto cache = nsLayoutStylesheetCache::Get();
 
     agentSheets.RemoveElement(cache->ContentEditableSheet());
     if (oldState == eDesignMode)
@@ -2525,7 +2526,7 @@ nsHTMLDocument::EditingStateChanged()
     rv = presShell->GetAgentStyleSheets(agentSheets);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    auto cache = nsLayoutStylesheetCache::For(GetStyleBackendType());
+    auto cache = nsLayoutStylesheetCache::Get();
 
     StyleSheet* contentEditableSheet = cache->ContentEditableSheet();
 
