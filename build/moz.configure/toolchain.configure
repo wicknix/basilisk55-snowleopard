@@ -361,7 +361,7 @@ def check_compiler(compiler, language, target):
     # -std=gnu++11.
     if info.language == 'C++':
         if info.type in ('clang', 'gcc') and info.language_version != 201103:
-            append_flag('-std=gnu++14')
+            append_flag('-std=gnu++17')
         # MSVC 2015 headers include C++14 features, but don't guard them
         # with appropriate checks.
         if info.type == 'clang-cl' and info.language_version != 201402:

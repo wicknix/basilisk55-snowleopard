@@ -46,7 +46,7 @@ SUPPORTS_GNU99 = {
 }
 
 SUPPORTS_GNUXX11 = {
-    '-std=gnu++14': DEFAULT_CXX_11,
+    '-std=gnu++11': DEFAULT_CXX_11,
 }
 
 SUPPORTS_CXX14 = {
