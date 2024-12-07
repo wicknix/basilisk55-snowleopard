@@ -7,7 +7,7 @@ if [ "$#" -ne 2 ]; then
 fi
 
 build_folder="$1"
-nightly_app="${build_folder}/dist/basilisk/InterWeb.app"
+nightly_app="${build_folder}/dist/interweb/InterWeb.app"
 dylib_folder="$2"
 
 # 1. Copy dylibs from the specified folder
@@ -24,7 +24,7 @@ install_name_tool -change /usr/lib/libSystem.B.dylib @executable_path/libMacport
 install_name_tool -change /usr/lib/libz.1.dylib @executable_path/libz.1.3.1.dylib "${nightly_app}/Contents/MacOS/XUL"
 
 # 4. Link LibC++
-install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/basilisk"
+install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/interweb"
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/XUL"
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/libmozglue.dylib"
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/libnss3.dylib"
@@ -38,4 +38,4 @@ install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dyli
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/libplugin_child_interpose.dylib"
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/libsoftokn3.dylib"
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/plugin-container.app/Contents/MacOS/plugin-container"
-install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/Resources/basilisk-bin"
+install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/Resources/interweb-bin"

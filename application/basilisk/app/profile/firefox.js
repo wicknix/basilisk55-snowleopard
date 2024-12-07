@@ -1540,3 +1540,41 @@ pref("webchannel.allowObject.urlWhitelist", "");
 
 // Preferences for the form autofill system extension
 pref("browser.formautofill.experimental", false);
+
+
+/* 0330: disable telemetry
+ * the pref (.unified) affects the behaviour of the pref (.enabled)
+ * IF unified=false then .enabled controls the telemetry module
+ * IF unified=true then .enabled ONLY controls whether to record extended data
+ * so make sure to have both set as false
+ * [NOTE] FF58+ 'toolkit.telemetry.enabled' is now LOCKED to reflect prerelease
+ * or release builds (true and false respectively), see [2]
+ * [1] https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/internals/preferences.html
+ * [2] https://medium.com/georg-fritzsche/data-preference-changes-in-firefox-58-2d5df9c428b5 ***/
+ pref("toolkit.telemetry.unified", false);
+ pref("toolkit.telemetry.enabled", false); // see [NOTE] above FF58+
+ pref("toolkit.telemetry.server", "data:,");
+ pref("toolkit.telemetry.archive.enabled", false);
+ /* 0331: disable Telemetry Coverage
+  * [1] https://blog.mozilla.org/data/2018/08/20/effectively-measuring-search-in-firefox/ ***/
+ pref("toolkit.telemetry.coverage.opt-out", true); // [HIDDEN PREF]
+ /* 0340: disable Health Reports
+  * [SETTING] Privacy & Security>Firefox Data Collection & Use>Allow Firefox to send technical... data ***/
+ pref("datareporting.healthreport.uploadEnabled", false);
+ /* 0341: disable new data submission, master kill switch [FF41+]
+  * If disabled, no policy is shown or upload takes place, ever
+  * [1] https://bugzilla.mozilla.org/1195552 ***/
+ pref("datareporting.policy.dataSubmissionEnabled", false);
+ /* 0342: disable Studies (see 0503)
+  * [NOTE] This pref has no effect when Health Reports (0340) are disabled
+  * [SETTING] Privacy & Security>Firefox Data Collection & Use>...>Allow Firefox to install and run studies ***/
+ pref("app.shield.optoutstudies.enabled", false);
+ /* 0343: disable personalized Extension Recommendations in about:addons and AMO [FF65+]
+  * [NOTE] This pref has no effect when Health Reports (0340) are disabled
+  * [SETTING] Privacy & Security>Firefox Data Collection & Use>...>Allow Firefox to make personalized extension rec.
+  * [1] https://support.mozilla.org/kb/personalized-extension-recommendations ***/
+ pref("browser.discovery.enabled", false);
+ /* 0350: disable Crash Reports ***/
+ pref("breakpad.reportURL", "");
+ pref("browser.tabs.crashReporting.sendReport", false); // [FF44+]
+ pref("browser.crashReports.unsubmittedCheck.enabled", false); // [FF51+]
