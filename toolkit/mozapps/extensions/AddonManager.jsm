@@ -627,8 +627,8 @@ function AddonType(aID, aLocaleURI, aLocaleKey, aViewType, aUIPriority, aFlags) 
 
 var gStarted = false;
 var gStartupComplete = false;
-var gCheckCompatibility = true;
-var gStrictCompatibility = true;
+var gCheckCompatibility = false;
+var gStrictCompatibility = false;
 var gCheckUpdateSecurityDefault = true;
 var gCheckUpdateSecurity = gCheckUpdateSecurityDefault;
 var gUpdateEnabled = true;

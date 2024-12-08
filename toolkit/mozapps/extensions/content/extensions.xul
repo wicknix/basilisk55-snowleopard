@@ -274,16 +274,6 @@
                     <label class="global-warning-text" flex="1" crop="end"
                            value="&warning.safemode.label;"/>
                   </hbox>
-                  <hbox class="global-warning-checkcompatibility" flex="1" align="center"
-                        tooltiptext="&warning.checkcompatibility.label;">
-                    <image class="warning-icon"/>
-                    <label class="global-warning-text" flex="1" crop="end"
-                           value="&warning.checkcompatibility.label;"/>
-                  </hbox>
-                  <button class="button-link global-warning-checkcompatibility"
-                          label="&warning.checkcompatibility.enable.label;"
-                          tooltiptext="&warning.checkcompatibility.enable.tooltip;"
-                          command="cmd_enableCheckCompatibility"/>
                   <hbox class="global-warning-updatesecurity" flex="1" align="center"
                         tooltiptext="&warning.updatesecurity.label;">
                     <image class="warning-icon"/>
@@ -376,16 +366,6 @@
                     <label class="global-warning-text" flex="1" crop="end"
                            value="&warning.safemode.label;"/>
                   </hbox>
-                  <hbox class="global-warning-checkcompatibility" flex="1" align="center"
-                        tooltiptext="&warning.checkcompatibility.label;">
-                    <image class="warning-icon"/>
-                    <label class="global-warning-text" flex="1" crop="end"
-                           value="&warning.checkcompatibility.label;"/>
-                  </hbox>
-                  <button class="button-link global-warning-checkcompatibility"
-                          label="&warning.checkcompatibility.enable.label;"
-                          tooltiptext="&warning.checkcompatibility.enable.tooltip;"
-                          command="cmd_enableCheckCompatibility"/>
                   <hbox class="global-warning-updatesecurity" flex="1" align="center"
                         tooltiptext="&warning.updatesecurity.label;">
                     <image class="warning-icon"/>
@@ -440,16 +420,6 @@
                     <label class="global-warning-text" flex="1" crop="end"
                            value="&warning.safemode.label;"/>
                   </hbox>
-                  <hbox class="global-warning-checkcompatibility" flex="1" align="center"
-                        tooltiptext="&warning.checkcompatibility.label;">
-                    <image class="warning-icon"/>
-                    <label class="global-warning-text" flex="1" crop="end"
-                           value="&warning.checkcompatibility.label;"/>
-                  </hbox>
-                  <button class="button-link global-warning-checkcompatibility"
-                          label="&warning.checkcompatibility.enable.label;"
-                          tooltiptext="&warning.checkcompatibility.enable.tooltip;"
-                          command="cmd_enableCheckCompatibility"/>
                   <hbox class="global-warning-updatesecurity" flex="1" align="center"
                         tooltiptext="&warning.updatesecurity.label;">
                     <image class="warning-icon"/>
@@ -496,16 +466,6 @@
                   <label class="global-warning-text" flex="1" crop="end"
                          value="&warning.safemode.label;"/>
                 </hbox>
-                <hbox class="global-warning-checkcompatibility" flex="1" align="center"
-                      tooltiptext="&warning.checkcompatibility.label;">
-                  <image class="warning-icon"/>
-                  <label class="global-warning-text" flex="1" crop="end"
-                         value="&warning.checkcompatibility.label;"/>
-                </hbox>
-                <button class="button-link global-warning-checkcompatibility"
-                        label="&warning.checkcompatibility.enable.label;"
-                        tooltiptext="&warning.checkcompatibility.enable.tooltip;"
-                        command="cmd_enableCheckCompatibility"/>
                 <hbox class="global-warning-updatesecurity" flex="1" align="center"
                       tooltiptext="&warning.updatesecurity.label;">
                   <image class="warning-icon"/>
