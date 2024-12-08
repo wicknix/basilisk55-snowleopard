@@ -25,8 +25,6 @@ pref("general.useragent.override.bing.com","Mozilla/5.0 (Macintosh; Intel Mac OS
 pref("general.useragent.override.chase.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:102.0) Gecko/20100101 Firefox/102.0");
 pref("general.useragent.override.dropbox.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:68.9) Gecko/20100101 Firefox/68.9 (Basilisk)");
 pref("general.useragent.override.instagram.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:68.0) Gecko/20100101 Firefox/68.0");
-pref("general.useragent.override.google.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:71.0) Gecko/20100101 Firefox/71.0 Basilisk/20240101");
-pref("general.useragent.override.googlevideos.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:38.9) Gecko/20100101 Goanna/102.0 Firefox/38.9 Basilisk/20240101");
 pref("general.useragent.override.gstatic.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:71.0) Gecko/20100101 Firefox/71.0 Basilisk/20240101");
 pref("general.useragent.override.kroger.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:86.0) Gecko/20100101 Firefox/86.0 (Basilisk)");
 pref("general.useragent.override.live.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:102.0) Gecko/20100101 Firefox/102.0 (Basilisk)");
@@ -67,9 +65,6 @@ pref("general.useragent.override.mewe.com", "Mozilla/5.0 (Macintosh; Intel Mac O
 
 // UA-sniffing domains that are "app/vendor-specific" and do not like Basilisk
 pref("general.useragent.override.web.whatsapp.com","Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36");
-pref("general.useragent.override.youtube.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:60.0) Gecko/20100101 Firefox/60.0");
-pref("general.useragent.override.studio.youtube.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:68.0) Gecko/20100101 Goanna/102.0 Firefox/68.0 Basilisk/20240101");
-pref("general.useragent.override.gaming.youtube.com","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:71.0) Gecko/20100101 Firefox/71.0");
 
 // The following domains do not like the Goanna slice
 pref("general.useragent.override.bab.la","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:102.0) Gecko/20100101 Firefox/102.0");
