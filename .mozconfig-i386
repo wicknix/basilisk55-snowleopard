@@ -1,0 +1,41 @@
+HOST_CC=clang
+HOST_CXX=clang++
+
+TARGET_CPU=i386
+CC="clang -arch $TARGET_CPU"
+CXX="clang++ -arch $TARGET_CPU"
+
+RANLIB="${TOOLCHAIN_PREFIX}ranlib"
+AR="${TOOLCHAIN_PREFIX}ar"
+AS=$CC
+LD=ld
+STRIP="${TOOLCHAIN_PREFIX}strip"
+OTOOL="${TOOLCHAIN_PREFIX}otool"
+export CC CXX HOST_CC HOST_CXX RANLIB AR AS LD STRIP OTOOL
+
+export CFLAGS="-march=yonah -mpclmul -femulated-tls -w -L/Users/greatj/Desktop/basilisk55/linked_libraries -lMacportsLegacySupport"
+export CXXFLAGS="-march=yonah -mpclmul -femulated-tls -Wno-dynamic-exception-spec -w -L/Users/greatj/Desktop/basilisk55/linked_libraries -lMacportsLegacySupport"
+
+ac_add_options --target=i386-apple-darwin10
+ac_add_options --enable-macos-target=10.6
+ac_add_options --with-macos-sdk=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+ac_add_options --enable-application=browser
+ac_add_options --enable-optimize="-O3"
+ac_add_options --disable-tests
+ac_add_options --enable-release
+ac_add_options --enable-strip
+ac_add_options --disable-debug
+ac_add_options --disable-crashreporter
+ac_add_options --enable-jemalloc
+ac_add_options --disable-maintenance-service
+ac_add_options --disable-updater
+ac_add_options --with-system-zlib
+ac_add_options --disable-webrtc
+ac_add_options --with-branding=application/basilisk/branding/interweb
+ac_add_options --with-distribution-id=com.jazzzny
+ac_add_options --enable-av1
+ac_add_options --enable-jxl
+ac_add_options --enable-bundled-fonts
+
+export MOZ_ADDON_SIGNING=0
+export MOZ_REQUIRE_SIGNING=0
