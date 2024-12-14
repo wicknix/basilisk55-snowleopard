@@ -1,27 +1,10 @@
-﻿# Unified XUL Platform (UXP)
-## Codename: Möbius
 
-This repository holds the code for a unified application platform for XUL-based
-applications. It is a hard fork from the Mozilla code repository (mozilla-central)
-with an early-2017 fork point.
+<img src="https://github.com/user-attachments/assets/ef4710cf-9cc7-4529-8b31-eb1eb12d3bac" width="500">
 
-In addition to further development based on the Mozilla upstream code, and
-selective cherry-picking of directly-applicable patches, this repository has its
-own development and holds the base for a future platform to be used by XUL
-applications.
+# InterWeb 55 Web Browser for Mac OS X 10.6 Snow Leopard
 
-This repository will contain at least one application to demonstrate and make use
-of the platform: The Basilisk web browser, a close twin to Mozilla's Firefox.
+This repository holds the source tree for InterWeb 55. It is a modern web browser based on the UXP/Möbius codebase maintained by Roytam1, which was originally a fork from Firefox 53.
 
-### A note about trademarks and branding
+InterWeb 55 is kept up to date with the modern web and vastly outpaces other 10.6-compatible web browsers in terms of web compatibility, features, and performance.
 
-Although this repository is licensed under Mozilla Public License v2.0, the
-trademarks and brands remain the property of their respective owners.
-For more details, please see the notifications in the respective directories.
-
-### Foundation and maintainership
-
-This repository has been founded and is maintained by Moonchild (M.C. Straver).
-If you fork this repository to perform your own work on it, please consider
-offering improvement patches upstream to its origin to mutually improve the
-platform and build a future for XUL.
+For more information, please visit the [InterWeb website](https://interweb.jazzzny.me).
