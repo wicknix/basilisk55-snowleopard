@@ -13,15 +13,15 @@ dylib_folder="$2"
 # 1. Copy dylibs from the specified folder
 cp "${dylib_folder}/libc++.1.dylib" "${nightly_app}/Contents/MacOS/libc++.1.dylib"
 cp "${dylib_folder}/libc++abi.dylib" "${nightly_app}/Contents/MacOS/libc++abi.dylib"
-cp "${dylib_folder}/libMacportsLegacySystem.B.dylib" "${nightly_app}/Contents/MacOS/libMacportsLegacySystem.B.dylib"
-cp "${dylib_folder}/libz.1.3.1.dylib" "${nightly_app}/Contents/MacOS/libz.1.3.1.dylib"
+#cp "${dylib_folder}/libMacportsLegacySystem.B.dylib" "${nightly_app}/Contents/MacOS/libMacportsLegacySystem.B.dylib"
+#cp "${dylib_folder}/libz.1.3.1.dylib" "${nightly_app}/Contents/MacOS/libz.1.3.1.dylib"
 
 # 2. Link MacPorts Legacy-Support
-install_name_tool -change /usr/lib/libSystem.B.dylib @executable_path/libMacportsLegacySystem.B.dylib "${nightly_app}/Contents/MacOS/XUL"
-install_name_tool -change /usr/lib/libSystem.B.dylib @executable_path/libMacportsLegacySystem.B.dylib "${nightly_app}/Contents/MacOS/libmozglue.dylib"
+#install_name_tool -change /usr/lib/libSystem.B.dylib @executable_path/libMacportsLegacySystem.B.dylib "${nightly_app}/Contents/MacOS/XUL"
+#install_name_tool -change /usr/lib/libSystem.B.dylib @executable_path/libMacportsLegacySystem.B.dylib "${nightly_app}/Contents/MacOS/libmozglue.dylib"
 
 # 3. Link Zlib
-install_name_tool -change /usr/lib/libz.1.dylib @executable_path/libz.1.3.1.dylib "${nightly_app}/Contents/MacOS/XUL"
+#install_name_tool -change /usr/lib/libz.1.dylib @executable_path/libz.1.3.1.dylib "${nightly_app}/Contents/MacOS/XUL"
 
 # 4. Link LibC++
 install_name_tool -change /usr/lib/libc++.1.dylib @executable_path/libc++.1.dylib "${nightly_app}/Contents/MacOS/interweb"
