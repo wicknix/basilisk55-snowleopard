@@ -33,7 +33,7 @@
         title="&aboutDialog.title;"
 #endif
         role="dialog"
-        aria-describedby="version distribution distributionId communityDesc contributeDesc trademark"
+        aria-describedby="version distribution distributionId authorDesc communityDesc contributeDesc trademark"
         >
 
   <script type="application/javascript" src="chrome://browser/content/aboutDialog.js"/>
@@ -122,10 +122,14 @@
               &warningDesc.version;
             </description>
           </vbox>
+          <description class="text-blurb" id="authorDesc">
+            InterWeb 55 Browser developed by Jazzzny
+          </description>
           <description class="text-blurb" id="communityDesc">
               This browser was made possible thanks to the efforts of <label class="text-link" href="https://github.com/roytam1">Roy Tam</label>, <label class="text-link" href="https://github.com/parrotgeek1">ParrotGeek</label>, <label class="text-link" href="http://www.palemoon.org/">the Pale Moon team</label>, and Mozilla developers. Learn <label class="text-link" useoriginprincipal="true" href="about:credits">who contributed</label> to this software.
           </description>
           <description class="text-blurb" id="contributeDesc">
+              The InterWeb name is used with permission from <label class="text-link" href="https://github.com/wicknix">Wicknix</label>.
           </description>
         </vbox>
       </vbox>
