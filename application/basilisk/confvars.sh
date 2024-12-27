@@ -43,8 +43,8 @@ MOZ_EXTENSIONS_DEFAULT=" gio"
 # For mozilla-beta, mozilla-release, or mozilla-central repositories, use
 # "unofficial" branding.
 # For the mozilla-aurora repository, use "aurora".
-MOZ_BRANDING_DIRECTORY=$MOZ_BUILD_APP/branding/unofficial
-MOZ_OFFICIAL_BRANDING_DIRECTORY=$MOZ_BUILD_APP/branding/official
+MOZ_BRANDING_DIRECTORY=$MOZ_BUILD_APP/branding/interweb
+MOZ_OFFICIAL_BRANDING_DIRECTORY=$MOZ_BUILD_APP/branding/interweb
 MOZ_APP_ID={ec8030f7-c20a-464f-9b0e-13a3a9e97384}
 # This should usually be the same as the value MAR_CHANNEL_ID.
 # If more than one ID is needed, then you should use a comma separated list
