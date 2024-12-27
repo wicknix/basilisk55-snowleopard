@@ -1584,3 +1584,5 @@ pref("browser.formautofill.experimental", false);
  pref("breakpad.reportURL", "");
  pref("browser.tabs.crashReporting.sendReport", false); // [FF44+]
  pref("browser.crashReports.unsubmittedCheck.enabled", false); // [FF51+]
+// Use dark colors on sites that support it like duckduckgo, google, gitub, etc //
+ pref("browser.display.prefers_color_scheme", 2);
